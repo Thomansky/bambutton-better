@@ -14,6 +14,7 @@ void Settings::load() {
   hostname = prefs.getString("hostname", "bambutton");
   host = prefs.getString("bb_host", "");
   apiKey = prefs.getString("bb_key", "");
+  apiEnabled = prefs.getBool("bb_on", true);
   pollIntervalMs = prefs.getUInt("poll_ms", 3000);
   httpTimeoutMs = prefs.getUInt("http_ms", 20000);
   for (int i = 0; i < STATION_COUNT; i++) {
@@ -36,6 +37,7 @@ void Settings::save() {
   prefs.putString("hostname", hostname);
   prefs.putString("bb_host", host);
   prefs.putString("bb_key", apiKey);
+  prefs.putBool("bb_on", apiEnabled);
   prefs.putUInt("poll_ms", pollIntervalMs);
   prefs.putUInt("http_ms", httpTimeoutMs);
   for (int i = 0; i < STATION_COUNT; i++) {

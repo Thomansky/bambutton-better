@@ -19,7 +19,7 @@
 #include "Station.h"
 #include "page.h"
 
-#define FW_VERSION "1.1.0"
+#define FW_VERSION "1.2.0"
 #define AP_SSID "Bambutton-Setup"
 // Setup AP is intentionally open: it only runs while the board is
 // unconfigured (or the button is held at boot) and never exposes the Wi-Fi
@@ -121,7 +121,7 @@ static void workerTask(void *) {
   uint32_t lastPoll = 0;
   for (;;) {
     hbWorker = millis();
-    if (!apMode && WiFi.status() == WL_CONNECTED && settings.hasApi()) {
+    if (!apMode && WiFi.status() == WL_CONNECTED && settings.hasApi() && settings.apiEnabled) {
       // Button presses first — that is what someone is standing there waiting for.
       for (int i = 0; i < STATION_COUNT; i++) {
         if (!pressPending[i]) continue;
@@ -183,6 +183,7 @@ static void handleStatus() {
   doc["hostname"] = settings.hostname;
   doc["ssid"] = settings.wifiSsid;
   doc["host"] = settings.host;
+  doc["apiEnabled"] = settings.apiEnabled;
   doc["polls"] = diag.polls;
   doc["errors"] = diag.errors;
   xSemaphoreTake(mux, portMAX_DELAY);
@@ -307,6 +308,7 @@ static void handleSave() {
   String k = in["key"] | "";
   if (h.length()) settings.host = h;
   if (k.length()) settings.apiKey = k;
+  if (!in["apiEnabled"].isNull()) settings.apiEnabled = in["apiEnabled"].as<bool>();
   settings.stations[0].printerId = in["p0"] | 0;
   settings.stations[1].printerId = in["p1"] | 0;
   settings.save();

@@ -16,6 +16,7 @@ class Settings {
   String hostname = "bambutton";
   String host;    // "192.168.1.50:8000" — no scheme, no /api/v1
   String apiKey;
+  bool apiEnabled = true;  // polling can be switched off without losing the config
   StationCfg stations[STATION_COUNT];
   uint32_t pollIntervalMs = 3000;
   // Clearing a plate makes Bambuddy talk to the printer, which can take

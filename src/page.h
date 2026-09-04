@@ -54,6 +54,11 @@ small{color:var(--mut);font-size:12px}
   <label>API-Key</label>
   <input id="key" type="password" placeholder="API-Key">
   <button onclick="loadPrinters()">Verbindung testen &amp; Drucker laden</button>
+  <label style="display:flex;align-items:center;gap:8px;margin-top:14px;color:var(--ink)">
+    <input type="checkbox" id="apiOn" style="width:auto;margin:0"> Bambuddy-Abfrage aktiv
+  </label>
+  <small>Zum Eingrenzen von Störungen abschaltbar: Das Board bleibt im WLAN und
+  erreichbar, fragt aber keine Druckerdaten mehr ab. Die Einstellungen bleiben erhalten.</small>
   <div id="m2" class="msg"></div>
 </div>
 
@@ -133,6 +138,7 @@ function saveAll(){
   msg('m3','','Speichere …');
   J('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({host:$('host').value.trim(),key:$('key').value,
+                         apiEnabled:$('apiOn').checked,
                          p0:parseInt($('p0').value||'0'),p1:parseInt($('p1').value||'0')})})
    .then(function(d){d.ok?msg('m3','ok','Gespeichert.'):msg('m3','err',d.error||'Fehler')})
    .catch(function(){msg('m3','err','Fehler beim Speichern.')});
@@ -165,6 +171,7 @@ function refresh(){
       ? 'Ersteinrichtung — verbinde das Board mit deinem WLAN.'
       : 'Verbunden als '+d.hostname+' · '+d.ip;
     if(d.host&&!$('host').value)$('host').value=d.host;
+    if(document.activeElement!==$('apiOn'))$('apiOn').checked=(d.apiEnabled!==false);
     if(d.hostname&&!$('hostname').value)$('hostname').value=d.hostname;
     if(d.ssid&&$('ssid').options.length<3){var o=document.createElement('option');o.value=d.ssid;o.textContent=d.ssid;$('ssid').insertBefore(o,$('ssid').children[1]);$('ssid').value=d.ssid}
     var h='';
@@ -177,6 +184,7 @@ function refresh(){
         s.printerId>0 ? ('Drucker '+s.printerId+' · '+(s.awaiting?'<b>Platte räumen</b>':'bereit')+' · Licht '+(s.light?'an':'aus'))
                       : 'kein Drucker zugeordnet');
     });
+    h+=row('Bambuddy-Abfrage',d.apiEnabled===false?'<b>abgeschaltet</b>':'aktiv');
     h+=row('Abfragen gesamt',d.polls+' ('+d.errors+' Fehler)');
     if(d.lastError)h+=row('Letzter Fehler','<span style="color:var(--err)">'+esc(d.lastError)+'</span>');
     if(d.lastClear)h+=row('Letztes clear-plate',esc(d.lastClear));
