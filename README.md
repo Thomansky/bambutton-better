@@ -17,9 +17,12 @@ frühere MicroPython-Variante und behebt deren Kernprobleme:
 
 ## Installieren
 
-**Der einfachste Weg:** die Flash-Seite im Browser öffnen (GitHub Pages dieses Repos),
-Board per Datenkabel anstecken, „Verbinden & installieren" klicken. Chrome oder Edge
-am Desktop nötig (Web Serial).
+**Der einfachste Weg:** die Flash-Seite öffnen —
+
+### 👉 https://thomansky.github.io/bambutton-better/
+
+Board per Datenkabel anstecken, „Verbinden & installieren" klicken, fertig.
+Chrome oder Edge am Desktop nötig (Web Serial); Firefox und Safari können das nicht.
 
 Alternativ lokal:
 

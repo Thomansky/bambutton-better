@@ -19,7 +19,7 @@
 #include "Station.h"
 #include "page.h"
 
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.1.0"
 #define AP_SSID "Bambutton-Setup"
 // Setup AP is intentionally open: it only runs while the board is
 // unconfigured (or the button is held at boot) and never exposes the Wi-Fi
@@ -31,6 +31,12 @@ Station stations[STATION_COUNT];
 
 static bool apMode = false;
 static volatile bool pressPending[STATION_COUNT] = {false, false};
+
+// Heartbeats: both the main loop and the worker stamp these. A separate
+// watchdog task reboots the board if either stops moving — without this the
+// board stays dead until someone unplugs it.
+static volatile uint32_t hbLoop = 0;
+static volatile uint32_t hbWorker = 0;
 static SemaphoreHandle_t mux = nullptr;
 
 struct Diag {
@@ -92,9 +98,29 @@ static void recordClear(int idx, const ApiResult &r) {
   Serial.println(s);
 }
 
+// A stalled task must never mean "dead until power-cycled".
+static void watchdogTask(void *) {
+  for (;;) {
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    uint32_t now = millis();
+    // The worker may legitimately block for a while on slow Bambuddy calls,
+    // so it gets a much longer leash than the main loop.
+    bool loopStalled = (now - hbLoop) > 60000;
+    bool workerStalled = (now - hbWorker) > 180000;
+    if (loopStalled || workerStalled) {
+      Serial.printf("WATCHDOG: %s haengt -> Neustart\n",
+                    loopStalled ? "Hauptschleife" : "Bambuddy-Task");
+      Serial.flush();
+      delay(200);
+      ESP.restart();
+    }
+  }
+}
+
 static void workerTask(void *) {
   uint32_t lastPoll = 0;
   for (;;) {
+    hbWorker = millis();
     if (!apMode && WiFi.status() == WL_CONNECTED && settings.hasApi()) {
       // Button presses first — that is what someone is standing there waiting for.
       for (int i = 0; i < STATION_COUNT; i++) {
@@ -413,7 +439,10 @@ void setup() {
   Serial.printf("Weboberflaeche: http://%s/\n",
                 (apMode ? WiFi.softAPIP() : WiFi.localIP()).toString().c_str());
 
-  if (!apMode) xTaskCreate(workerTask, "bambuddy", 8192, nullptr, 1, nullptr);
+  hbLoop = hbWorker = millis();
+  // 12 KB: the 8 KB original was tight once Bambuddy responses got parsed.
+  if (!apMode) xTaskCreate(workerTask, "bambuddy", 12288, nullptr, 1, nullptr);
+  xTaskCreate(watchdogTask, "watchdog", 2560, nullptr, 3, nullptr);
 }
 
 void loop() {
@@ -421,6 +450,19 @@ void loop() {
   if (apMode) dnsServer.processNextRequest();
 
   uint32_t now = millis();
+  hbLoop = now;
+
+  // Periodic health line: a falling heap points at a leak, a falling RSSI at
+  // reception. Both are the usual suspects behind "it just disappears".
+  static uint32_t lastLog = 0;
+  if (now - lastLog > 30000) {
+    lastLog = now;
+    Serial.printf("[%lus] Heap %u B (min %u) | RSSI %d dBm | WiFi %d | Abfragen %u, Fehler %u\n",
+                  (unsigned long)(now / 1000), (unsigned)ESP.getFreeHeap(),
+                  (unsigned)ESP.getMinFreeHeap(), (int)WiFi.RSSI(),
+                  (int)WiFi.status(), (unsigned)diag.polls, (unsigned)diag.errors);
+  }
+
   for (int i = 0; i < STATION_COUNT; i++) {
     stations[i].pollButton();
     if (stations[i].consumePress()) pressPending[i] = true;
