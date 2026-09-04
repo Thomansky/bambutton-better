@@ -1,6 +1,6 @@
 # Bambutton (ESP32-C3, C++)
 
-Ein physischer Knopf, der in [Bambuddy](https://bambuddy.io) die Druckplatte freigibt.
+Ein physischer Knopf, der in [Bambuddy](https://bambuddy.cool) die Druckplatte freigibt.
 Die LED zeigt den Druckerzustand, ein Tastendruck meldet die Platte frei und stößt
 den nächsten Job an. **Ein ESP32-C3 bedient zwei Drucker.**
 
