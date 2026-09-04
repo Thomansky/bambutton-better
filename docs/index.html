@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bambutton flashen</title>
+<style>
+:root{--bg:#f1f5f9;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--acc:#2563eb}
+@media(prefers-color-scheme:dark){:root{--bg:#0f172a;--card:#1e293b;--ink:#f1f5f9;--mut:#94a3b8;--line:#334155}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:32px 20px 64px}
+h1{font-size:28px;margin:0 0 6px}
+.sub{color:var(--mut);margin:0 0 28px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:18px}
+h2{font-size:17px;margin:0 0 10px}
+ol{margin:0;padding-left:20px}li{margin:6px 0}
+code{background:var(--bg);padding:2px 6px;border-radius:5px;font-size:14px;border:1px solid var(--line)}
+.note{color:var(--mut);font-size:14px}
+.center{text-align:center;padding:8px 0}
+</style>
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</head>
+<body><div class="wrap">
+
+<h1>Bambutton</h1>
+<p class="sub">Ein physischer Knopf, der in Bambuddy die Druckplatte freigibt — für zwei Drucker an einem ESP32-C3.</p>
+
+<div class="card">
+  <h2>Firmware installieren</h2>
+  <ol>
+    <li>ESP32-C3 per <strong>Datenkabel</strong> an den Rechner stecken.</li>
+    <li>Auf den Knopf unten klicken und den seriellen Port auswählen.</li>
+  </ol>
+  <div class="center">
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate" style="padding:12px 22px;border:0;border-radius:9px;background:var(--acc);color:#fff;font-size:16px;font-weight:600;cursor:pointer">
+        Verbinden &amp; installieren
+      </button>
+      <span slot="unsupported">Dieser Browser kann nicht flashen — bitte Chrome oder Edge am Desktop verwenden.</span>
+      <span slot="not-allowed">Das Flashen braucht eine sichere Verbindung (HTTPS).</span>
+    </esp-web-install-button>
+  </div>
+  <p class="note">Funktioniert in Chrome und Edge über Web Serial. Firefox und Safari unterstützen das nicht.</p>
+</div>
+
+<div class="card">
+  <h2>Danach einrichten</h2>
+  <ol>
+    <li>Das Board öffnet ein offenes WLAN namens <code>Bambutton-Setup</code> — kein Passwort nötig.</li>
+    <li>Mit dem Handy verbinden — die Einrichtungsseite öffnet sich von selbst.</li>
+    <li>WLAN auswählen, Passwort eingeben, speichern. Das Board startet neu.</li>
+    <li>Danach im Browser unter der IP des Boards Bambuddy-Adresse und API-Key eintragen und den Knöpfen Drucker zuordnen.</li>
+  </ol>
+</div>
+
+<div class="card">
+  <h2>Verdrahtung</h2>
+  <p class="note">Standardbelegung (in der Weboberfläche änderbar):</p>
+  <ol>
+    <li>Knopf A: LED an <code>GPIO3</code>, Taster an <code>GPIO4</code></li>
+    <li>Knopf B: LED an <code>GPIO5</code>, Taster an <code>GPIO6</code></li>
+  </ol>
+  <p class="note">Taster jeweils gegen <code>3V3</code> (interner Pull-down), LED über einen Vorwiderstand gegen <code>GND</code>.</p>
+</div>
+
+</div></body></html>

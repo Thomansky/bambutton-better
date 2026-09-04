@@ -1,0 +1,5 @@
+.pio/
+.vscode/
+site/
+*.bin
+!docs/firmware/*.bin
