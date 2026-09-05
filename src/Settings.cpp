@@ -53,6 +53,7 @@ void Settings::load() {
   httpTimeoutMs = prefs.getUInt("http_ms", 20000);
   txPower = (int8_t)prefs.getInt("txpwr", 34);
   idleLed = (uint8_t)prefs.getUChar("idleled", IDLE_FOLLOW_LIGHT);
+  lang = (uint8_t)prefs.getUChar("lang", LANG_DE);
   for (int i = 0; i < STATION_COUNT; i++) {
     char k[8];
     snprintf(k, sizeof(k), "p%d", i);
@@ -72,6 +73,7 @@ void Settings::load() {
   if (httpTimeoutMs > 60000) httpTimeoutMs = 60000;
   if (!validTxPower(txPower)) txPower = 34;
   if (idleLed > IDLE_OFF) idleLed = IDLE_FOLLOW_LIGHT;
+  if (lang > LANG_EN) lang = LANG_DE;
   if (apPass.length() > 0 && apPass.length() < 8) apPass = "";
   if (apPass.length() > 63) apPass = apPass.substring(0, 63);
 }
@@ -89,6 +91,7 @@ void Settings::save() {
   prefs.putUInt("http_ms", httpTimeoutMs);
   prefs.putInt("txpwr", txPower);
   prefs.putUChar("idleled", idleLed);
+  prefs.putUChar("lang", lang);
   for (int i = 0; i < STATION_COUNT; i++) {
     char k[8];
     snprintf(k, sizeof(k), "p%d", i);

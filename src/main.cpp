@@ -12,6 +12,8 @@
 //    that worker as jobs and polled by the page.
 //  * Every failure is kept in memory and shown in the web UI instead of only
 //    being printed to a serial console nobody is watching.
+//  * User-facing texts exist in German and English (tr()); the language is a
+//    board setting so firmware messages and the page always match.
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
@@ -29,11 +31,12 @@
 WebServer server(80);
 Station stations[STATION_COUNT];
 
-// A press is handed to the worker with its timestamp. If it cannot be
-// delivered within a few seconds it is dropped (with a visible "failed"
-// flicker) instead of firing minutes later when the link comes back.
+// A press is handed to the worker with its timestamp. The worker serves it as
+// soon as the call in flight (at most a clear-plate with its 20 s timeout) is
+// over; a press older than this is dropped with a visible "failed" flicker
+// instead of firing much later.
 static volatile uint32_t pressAt[STATION_COUNT] = {0, 0};
-static const uint32_t PRESS_MAX_AGE_MS = 10000;
+static const uint32_t PRESS_MAX_AGE_MS = 30000;
 
 // Heartbeats: both the main loop and the worker stamp these. A separate
 // watchdog task reboots the board if either stops moving — without this the
@@ -87,10 +90,10 @@ static const char *stationName(int i) { return i == 0 ? "A" : "B"; }
 // ------------------------------------------------------------- worker thread
 
 static void recordClear(int idx, const ApiResult &r) {
-  String s = "Knopf " + String(stationName(idx)) + ": ";
-  if (r.ok) s += "OK, HTTP " + String(r.status) + " nach " + String(r.ms) + " ms";
-  else if (r.notAwaiting) s += "nichts zu raeumen (HTTP 400) nach " + String(r.ms) + " ms";
-  else s += "FEHLER nach " + String(r.ms) + " ms: " + r.error;
+  String s = String(tr("Knopf ", "Button ")) + stationName(idx) + ": ";
+  if (r.ok) s += "OK, HTTP " + String(r.status) + tr(" nach ", " after ") + String(r.ms) + " ms";
+  else if (r.notAwaiting) s += String(tr("nichts zu raeumen (HTTP 400) nach ", "nothing to clear (HTTP 400) after ")) + String(r.ms) + " ms";
+  else s += String(tr("FEHLER nach ", "FAILED after ")) + String(r.ms) + " ms: " + r.error;
   lockedCopy(diag.lastClear, sizeof(diag.lastClear), s);
   if (!r.ok && !r.notAwaiting) lockedCopy(diag.lastError, sizeof(diag.lastError), s);
   Serial.println("[bambuddy] " + s);
@@ -117,17 +120,19 @@ static void pollStation(int i) {
     if (r.status == 429) backoffUntil = millis() + 120000;
     lockedCopy(diag.st[i].lastError, sizeof(diag.st[i].lastError), r.error);
     lockedCopy(diag.lastError, sizeof(diag.lastError),
-               "Status Knopf " + String(stationName(i)) + ": " + r.error);
+               String(tr("Status Knopf ", "Status button ")) + stationName(i) + ": " + r.error);
     if (diag.st[i].fails >= 3) st.noLink = true;
     Serial.printf("[bambuddy] Status Knopf %s: %s\n", stationName(i), r.error.c_str());
   }
 }
 
 static void runJob() {
-  if (job.kind == JOB_PRINTERS) {
+  uint8_t kind = job.kind;  // read once: the loop task may be re-arming the job
+  if (kind == JOB_NONE) return;
+  if (kind == JOB_PRINTERS) {
     JsonDocument list;
     ApiResult r = bambuddy.getPrinters(list, job.host, job.key);
-    String out = "[";
+    String out = "[]";
     if (r.ok) {
       JsonArray src;
       if (list.is<JsonArray>()) src = list.as<JsonArray>();
@@ -142,16 +147,17 @@ static void runJob() {
         const char *name = p["friendly_name"].as<const char *>();
         if (!name) name = p["name"].as<const char *>();
         if (!name) name = p["display_name"].as<const char *>();
-        o["name"] = name ? name : "Drucker";
+        o["name"] = name ? name : tr("Drucker", "Printer");
       }
       out = "";
       serializeJson(arr, out);
     }
     xSemaphoreTake(mux, portMAX_DELAY);
     job.result = r;
-    job.printersJson = r.ok ? out : "[]";
+    job.printersJson = out;
     xSemaphoreGive(mux);
-  } else if (job.kind == JOB_TESTCLEAR) {
+    job.done = true;
+  } else if (kind == JOB_TESTCLEAR) {
     Station &st = stations[job.station];
     st.busy = true;
     ApiResult r = bambuddy.clearPlate(st.printerId);
@@ -162,8 +168,8 @@ static void runJob() {
     xSemaphoreTake(mux, portMAX_DELAY);
     job.result = r;
     xSemaphoreGive(mux);
+    job.done = true;
   }
-  job.done = true;
 }
 
 // A stalled task must never mean "dead until power-cycled".
@@ -208,12 +214,19 @@ static void workerTask(void *) {
       if (!st.active) continue;
       if (millis() - at > PRESS_MAX_AGE_MS) {
         st.feedback(false);
+        ApiResult r;
+        r.ms = millis() - at;
+        r.error = String(tr("Tastendruck verworfen: Bambuddy-Task war ", "press dropped: the Bambuddy task was busy for ")) +
+                  String(r.ms / 1000) + tr(" s blockiert", " s");
+        recordClear(i, r);
         continue;
       }
       if (!canTalk) {
         st.feedback(false);
         ApiResult r;
-        r.error = !link ? "kein WLAN" : (!configured ? "Bambuddy nicht konfiguriert" : "Bambuddy-Abfrage abgeschaltet");
+        r.error = !link ? tr("kein WLAN", "no Wi-Fi")
+                        : (!configured ? tr("Bambuddy nicht konfiguriert", "Bambuddy not configured")
+                                       : tr("Bambuddy-Abfrage abgeschaltet", "Bambuddy polling switched off"));
         recordClear(i, r);
         continue;
       }
@@ -278,12 +291,17 @@ static void scheduleReboot(uint32_t inMs) {
   rebootAt = t ? t : 1;
 }
 
+// Did this request arrive over the setup network? Decided by the interface it
+// came in on, so a home LAN that happens to use 192.168.4.x is not affected.
+static bool fromAp() {
+  return net.apActive() && server.client().localIP() == net.apIp();
+}
+
 // Captive portal: a phone on the setup network probing some other host name
 // (connectivitycheck.gstatic.com, captive.apple.com, msftconnecttest.com …)
 // is redirected to the portal address, which makes the OS pop the page up.
 static bool captiveRedirect() {
-  if (!net.apActive()) return false;
-  if (!net.isApClient(server.client().remoteIP())) return false;
+  if (!fromAp()) return false;
   String host = server.hostHeader();
   String ap = net.apIp().toString();
   if (host == ap || host == ap + ":80") return false;
@@ -305,7 +323,7 @@ static void handleRoot() {
 
 static void handleNotFound() {
   if (captiveRedirect()) return;
-  if (net.apActive() && net.isApClient(server.client().remoteIP())) {
+  if (fromAp()) {
     sendPage();  // anything a captive-portal browser asks for shows the page
     return;
   }
@@ -326,6 +344,7 @@ static void handleStatus() {
   doc["pollMs"] = settings.pollIntervalMs;
   doc["idleLed"] = settings.idleLed;
   doc["apPassSet"] = settings.apPass.length() > 0;
+  doc["lang"] = settings.lang;
   settings.unlock();
   doc["polls"] = diag.polls;
   doc["errors"] = diag.errors;
@@ -354,6 +373,7 @@ static void handleWifiState() {
   JsonDocument doc;
   JsonObject n = doc.to<JsonObject>();
   net.fillStatus(n);
+  n["lang"] = settings.lang;
   sendJson(doc);
 }
 
@@ -363,30 +383,33 @@ static void handleScan() {
   JsonDocument doc;
   doc["scanning"] = net.scanning();
   doc["failed"] = net.scanFailed() && !net.scanning();
+  doc["testing"] = net.testing();
   JsonArray arr = doc["networks"].to<JsonArray>();
   if (!net.scanning()) net.fillScan(arr);
   sendJson(doc);
 }
 
-// Reads ssid/pass/hostname from the body, validates, stores the hostname.
-static bool readWifiBody(String &ssid, String &pass) {
+// Reads ssid/pass/hostname/seq from the body, validates, applies the hostname.
+static bool readWifiBody(String &ssid, String &pass, uint32_t &seq) {
   JsonDocument in;
   if (!bodyJson(in)) {
-    sendError("Ungueltige Anfrage");
+    sendError(tr("Ungueltige Anfrage", "Invalid request"));
     return false;
   }
   ssid = in["ssid"] | "";
   ssid.trim();
   pass = in["pass"] | "";
+  seq = in["seq"] | 0;
   String hn = in["hostname"] | "";
   if (ssid.length() == 0) {
-    sendError("Kein WLAN-Name angegeben");
+    sendError(tr("Kein WLAN-Name angegeben", "No network name given"));
     return false;
   }
   if (ssid.length() > 32) {
-    sendError("WLAN-Name zu lang (max. 32 Zeichen)");
+    sendError(tr("WLAN-Name zu lang (max. 32 Zeichen)", "Network name too long (max. 32 characters)"));
     return false;
   }
+  bool renamed = false;
   settings.lock();
   // Same network, empty password field: keep the stored password.
   if (pass.length() == 0 && ssid == settings.wifiSsid) pass = settings.wifiPass;
@@ -395,16 +418,18 @@ static bool readWifiBody(String &ssid, String &pass) {
     if (clean != settings.hostname) {
       settings.hostname = clean;
       settings.save();
-      net.renameMdns();
+      renamed = true;
     }
   }
   settings.unlock();
+  if (renamed) net.applyHostname();
   if (pass.length() > 0 && pass.length() < 8) {
-    sendError("Das WLAN-Passwort hat mindestens 8 Zeichen (leer lassen = offenes Netz)");
+    sendError(tr("Das WLAN-Passwort hat mindestens 8 Zeichen (leer lassen = offenes Netz)",
+                 "A Wi-Fi password has at least 8 characters (leave empty for an open network)"));
     return false;
   }
   if (pass.length() > 63) {
-    sendError("WLAN-Passwort zu lang (max. 63 Zeichen)");
+    sendError(tr("WLAN-Passwort zu lang (max. 63 Zeichen)", "Wi-Fi password too long (max. 63 characters)"));
     return false;
   }
   return true;
@@ -412,19 +437,23 @@ static bool readWifiBody(String &ssid, String &pass) {
 
 static void handleWifiConnect() {
   String ssid, pass;
-  if (!readWifiBody(ssid, pass)) return;
-  if (!net.startTest(ssid, pass)) {
-    sendError("Es laeuft bereits ein Verbindungsversuch — bitte warten");
+  uint32_t seq;
+  if (!readWifiBody(ssid, pass, seq)) return;
+  if (!net.startTest(ssid, pass, seq)) {
+    sendError(tr("Es laeuft bereits ein Verbindungsversuch — bitte warten",
+                 "A connection attempt is already running — please wait"));
     return;
   }
   JsonDocument out;
   out["ok"] = true;
+  out["seq"] = seq;
   sendJson(out);
 }
 
 static void handleWifiSave() {
   String ssid, pass;
-  if (!readWifiBody(ssid, pass)) return;
+  uint32_t seq;
+  if (!readWifiBody(ssid, pass, seq)) return;
   settings.lock();
   settings.wifiSsid = ssid;
   settings.wifiPass = pass;
@@ -437,13 +466,15 @@ static void handleWifiSave() {
 }
 
 static void handleWifiFinish() {
-  if (!net.closePortal()) {
-    sendError("Das Setup-Netz schliesst erst, wenn die WLAN-Verbindung steht");
+  if (net.apActive() && (!net.staConnected() || net.testing())) {
+    sendError(tr("Das Setup-Netz schliesst erst, wenn die WLAN-Verbindung steht",
+                 "The setup network only closes once the Wi-Fi connection is up"));
     return;
   }
   JsonDocument out;
   out["ok"] = true;
   sendJson(out);
+  net.closePortalSoon(600);  // after this reply has left the board
 }
 
 static void handleWifiPortal() {
@@ -488,20 +519,22 @@ static void handlePrinters() {
   if (k.length() == 0) k = settings.apiKey;
   settings.unlock();
   if (h.length() == 0 || k.length() == 0) {
-    sendError("Bitte Bambuddy-Adresse und API-Key eintragen");
+    sendError(tr("Bitte Bambuddy-Adresse und API-Key eintragen", "Please enter the Bambuddy address and API key"));
     return;
   }
   if (h.startsWith("https://")) {
-    sendError("https wird nicht unterstuetzt — bitte die Adresse als IP:Port (http) angeben");
+    sendError(tr("https wird nicht unterstuetzt — bitte die Adresse als IP:Port (http) angeben",
+                 "https is not supported — please enter the address as IP:port (http)"));
     return;
   }
   if (!net.staConnected()) {
-    sendError("Kein WLAN — Bambuddy kann erst nach der WLAN-Verbindung erreicht werden");
+    sendError(tr("Kein WLAN — Bambuddy kann erst nach der WLAN-Verbindung erreicht werden",
+                 "No Wi-Fi — Bambuddy can only be reached once the Wi-Fi connection is up"));
     return;
   }
   uint32_t id;
   if (!startJob(JOB_PRINTERS, 0, h, k, id)) {
-    sendError("Bitte warten — eine andere Anfrage laeuft noch");
+    sendError(tr("Bitte warten — eine andere Anfrage laeuft noch", "Please wait — another request is still running"));
     return;
   }
   JsonDocument out;
@@ -515,7 +548,7 @@ static void handleJob() {
   JsonDocument out;
   if (id != job.id || job.kind == JOB_NONE) {
     out["ok"] = false;
-    out["error"] = "Unbekannte Anfrage";
+    out["error"] = tr("Unbekannte Anfrage", "Unknown request");
     sendJson(out);
     return;
   }
@@ -556,29 +589,31 @@ static void applyStations() {
 static void handleSave() {
   JsonDocument in;
   if (!bodyJson(in)) {
-    sendError("Ungueltige Anfrage");
+    sendError(tr("Ungueltige Anfrage", "Invalid request"));
     return;
   }
   String h = in["host"] | "";
   h.trim();
   if (h.startsWith("https://")) {
-    sendError("https wird nicht unterstuetzt — bitte die Adresse als IP:Port (http) angeben");
+    sendError(tr("https wird nicht unterstuetzt — bitte die Adresse als IP:Port (http) angeben",
+                 "https is not supported — please enter the address as IP:port (http)"));
     return;
   }
   String k = in["key"] | "";
   String ap = in["apPass"] | "";
   if (!in["apPass"].isNull() && ap.length() > 0 && (ap.length() < 8 || ap.length() > 63)) {
-    sendError("Das Setup-Netz-Passwort hat 8 bis 63 Zeichen (leer = offenes Setup-Netz)");
+    sendError(tr("Das Setup-Netz-Passwort hat 8 bis 63 Zeichen (leer = offenes Setup-Netz)",
+                 "The setup network password has 8 to 63 characters (empty = open setup network)"));
     return;
   }
   int tx = in["txPower"] | -1;
   if (tx >= 0 && !Settings::validTxPower(tx)) {
-    sendError("Ungueltige Sendeleistung");
+    sendError(tr("Ungueltige Sendeleistung", "Invalid transmit power"));
     return;
   }
 
   settings.lock();
-  if (h.length()) settings.host = h;
+  if (!in["host"].isNull()) settings.host = h;  // sent only when edited; empty clears it
   if (k.length()) settings.apiKey = k;
   if (!in["apiEnabled"].isNull()) settings.apiEnabled = in["apiEnabled"].as<bool>();
   if (!in["p0"].isNull()) settings.stations[0].printerId = in["p0"] | 0;
@@ -590,6 +625,10 @@ static void handleSave() {
   if (!in["idleLed"].isNull()) {
     int m = in["idleLed"] | 0;
     settings.idleLed = (m < 0 || m > IDLE_OFF) ? IDLE_FOLLOW_LIGHT : (uint8_t)m;
+  }
+  if (!in["lang"].isNull()) {
+    int l = in["lang"] | 0;
+    settings.lang = (l == LANG_EN) ? LANG_EN : LANG_DE;
   }
   if (tx >= 0) settings.txPower = (int8_t)tx;
   if (!in["apPass"].isNull()) settings.apPass = ap;
@@ -612,7 +651,7 @@ static int argIndex() {
 static void handleIdentify() {
   int i = argIndex();
   if (i < 0) {
-    sendError("Ungueltiger Knopf");
+    sendError(tr("Ungueltiger Knopf", "Invalid button"));
     return;
   }
   stations[i].identify(4000);
@@ -626,27 +665,27 @@ static void handleIdentify() {
 static void handleTestClear() {
   int i = argIndex();
   if (i < 0) {
-    sendError("Ungueltiger Knopf");
+    sendError(tr("Ungueltiger Knopf", "Invalid button"));
     return;
   }
   if (!stations[i].active) {
-    sendError("Diesem Knopf ist kein Drucker zugeordnet");
+    sendError(tr("Diesem Knopf ist kein Drucker zugeordnet", "No printer is assigned to this button"));
     return;
   }
   if (!net.staConnected()) {
-    sendError("Kein WLAN");
+    sendError(tr("Kein WLAN", "No Wi-Fi"));
     return;
   }
   settings.lock();
   bool configured = settings.hasApi();
   settings.unlock();
   if (!configured) {
-    sendError("Bambuddy ist nicht konfiguriert");
+    sendError(tr("Bambuddy ist nicht konfiguriert", "Bambuddy is not configured"));
     return;
   }
   uint32_t id;
   if (!startJob(JOB_TESTCLEAR, i, "", "", id)) {
-    sendError("Bitte warten — eine andere Anfrage laeuft noch");
+    sendError(tr("Bitte warten — eine andere Anfrage laeuft noch", "Please wait — another request is still running"));
     return;
   }
   JsonDocument out;
@@ -668,7 +707,7 @@ static void handleOtaDone() {
   JsonDocument out;
   bool ok = otaError.length() == 0 && !Update.hasError();
   out["ok"] = ok;
-  if (!ok) out["error"] = otaError.length() ? otaError : String("Update fehlgeschlagen: ") + Update.errorString();
+  if (!ok) out["error"] = otaError.length() ? otaError : String(tr("Update fehlgeschlagen: ", "Update failed: ")) + Update.errorString();
   server.sendHeader("Connection", "close");
   sendJson(out);
   if (ok) scheduleReboot(800);
@@ -680,29 +719,32 @@ static void handleOtaUpload() {
   if (up.status == UPLOAD_FILE_START) {
     otaError = "";
     Serial.printf("OTA start: %s\n", up.filename.c_str());
-    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) otaError = String("Update kann nicht starten: ") + Update.errorString();
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+      otaError = String(tr("Update kann nicht starten: ", "Update cannot start: ")) + Update.errorString();
   } else if (up.status == UPLOAD_FILE_WRITE) {
     if (otaError.length()) return;
     if (up.totalSize == 0 && up.currentSize > 0 && up.buf[0] != 0xE9) {
-      otaError = "Das ist kein ESP32-Firmware-Image (firmware.bin erwartet)";
+      otaError = tr("Das ist kein ESP32-Firmware-Image (firmware.bin erwartet)",
+                    "This is not an ESP32 firmware image (firmware.bin expected)");
       Update.abort();
       return;
     }
     if (Update.write(up.buf, up.currentSize) != up.currentSize) {
-      otaError = String("Schreibfehler: ") + Update.errorString();
+      otaError = String(tr("Schreibfehler: ", "Write error: ")) + Update.errorString();
       Update.abort();
     }
   } else if (up.status == UPLOAD_FILE_END) {
     if (otaError.length()) return;
     if (up.totalSize < 262144) {
-      otaError = "Datei zu klein fuer eine Firmware — bootloader.bin/partitions.bin gehoeren nicht hierher";
+      otaError = tr("Datei zu klein fuer eine Firmware — bootloader.bin/partitions.bin gehoeren nicht hierher",
+                    "File too small for a firmware — bootloader.bin/partitions.bin do not belong here");
       Update.abort();
       return;
     }
     if (Update.end(true)) Serial.printf("OTA fertig: %u Bytes\n", (unsigned)up.totalSize);
-    else otaError = String("Update unvollstaendig: ") + Update.errorString();
+    else otaError = String(tr("Update unvollstaendig: ", "Update incomplete: ")) + Update.errorString();
   } else if (up.status == UPLOAD_FILE_ABORTED) {
-    otaError = "Upload abgebrochen";
+    otaError = tr("Upload abgebrochen", "Upload aborted");
     Update.abort();
   }
 }

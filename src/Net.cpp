@@ -1,6 +1,8 @@
 #include "Net.h"
 #include "Settings.h"
 #include <ESPmDNS.h>
+#include <mdns.h>
+#include <esp_netif.h>
 #include <algorithm>
 
 Net net;
@@ -45,6 +47,7 @@ void CaptiveDns::poll() {
   // one A answer for A/ANY queries, none otherwise (so AAAA lookups end
   // quickly instead of timing out). Additional records are dropped.
   uint8_t out[512];
+  if (qend + 16 > (int)sizeof(out)) return;  // absurdly long name: ignore
   int o = 0;
   bool answer = (qtype == 1 || qtype == 255);
   out[o++] = _buf[0]; out[o++] = _buf[1];
@@ -68,6 +71,8 @@ void CaptiveDns::poll() {
   _udp.endPacket();
 }
 
+// ------------------------------------------------------------------ timing
+
 static const uint32_t BOOT_FALLBACK_MS   = 30000;   // setup network appears if the boot connect fails
 static const uint32_t DOWN_FALLBACK_MS   = 60000;   // ... or after a minute of lost connection later
 static const uint32_t KICK_STA_MS        = 20000;   // station only: kick begin() if the core stalls
@@ -75,10 +80,12 @@ static const uint32_t KICK_AP_MS         = 30000;   // with the AP up: slower (s
 static const uint32_t STALL_MS           = 25000;   // no event for this long -> attempt is stuck
 static const uint32_t TEST_TIMEOUT_MS    = 35000;
 static const uint32_t TEST_DHCP_MS       = 20000;   // link up but no IP for this long -> DHCP problem
+static const uint32_t TEST_STALL_MS      = 12000;   // begin() produced no event at all -> retry
 static const uint32_t AP_GRACE_MS        = 90000;   // AP stays this long after connecting
 static const uint32_t AP_MAX_AFTER_UP_MS = 300000;  // even with a phone still attached
 static const uint32_t REBOOT_DOWN_MS     = 30UL * 60UL * 1000UL;
 static const uint32_t SCAN_TIMEOUT_MS    = 15000;
+static const uint32_t SCAN_MS_PER_CHAN   = 300;     // the core's own scan timeout is 20x this
 
 // ------------------------------------------------------------------ events
 
@@ -112,6 +119,16 @@ void Net::applyTxPower() {
   WiFi.setTxPower((wifi_power_t)settings.txPower);
 }
 
+void Net::applyHostname() {
+  // Default for interfaces created later, the live station interface for the
+  // next DHCP request, and the mDNS name (renamed in place — never torn down,
+  // the worker may be inside a .local lookup right now).
+  WiFi.setHostname(settings.hostname.c_str());
+  esp_netif_t *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+  if (sta) esp_netif_set_hostname(sta, settings.hostname.c_str());
+  if (_mdnsUp) mdns_hostname_set(settings.hostname.c_str());
+}
+
 String Net::currentSsid() const {
   if (_testing) return _testSsid;
   return settings.wifiSsid;
@@ -128,17 +145,11 @@ uint32_t Net::downSeconds() const {
 String Net::rssiText() const {
   if (!staConnected()) return "";
   int r = WiFi.RSSI();
-  if (r >= -55) return "sehr gut";
-  if (r >= -67) return "gut";
-  if (r >= -75) return "mittel";
-  if (r >= -85) return "schwach";
-  return "sehr schwach";
-}
-
-bool Net::isApClient(IPAddress ip) const {
-  if (!_apUp) return false;
-  IPAddress ap = WiFi.softAPIP();
-  return ip[0] == ap[0] && ip[1] == ap[1] && ip[2] == ap[2];
+  if (r >= -55) return tr("sehr gut", "excellent");
+  if (r >= -67) return tr("gut", "good");
+  if (r >= -75) return tr("mittel", "fair");
+  if (r >= -85) return tr("schwach", "weak");
+  return tr("sehr schwach", "very weak");
 }
 
 const char *Net::phaseName() const {
@@ -153,33 +164,40 @@ const char *Net::phaseName() const {
 
 String Net::phaseText() const {
   switch (_phase) {
-    case NetPhase::Connecting: return "Suche Netzwerk und melde mich an";
-    case NetPhase::GotLink:    return "Angemeldet, warte auf IP-Adresse vom Router";
-    case NetPhase::Connected:  return "Verbunden";
-    case NetPhase::Failed:     return "Fehlgeschlagen";
-    default:                   return settings.hasWifi() ? "Nicht verbunden" : "Kein WLAN eingerichtet";
+    case NetPhase::Connecting: return tr("Suche Netzwerk und melde mich an", "Looking for the network and authenticating");
+    case NetPhase::GotLink:    return tr("Angemeldet, warte auf IP-Adresse vom Router", "Associated, waiting for an IP address from the router");
+    case NetPhase::Connected:  return tr("Verbunden", "Connected");
+    case NetPhase::Failed:     return tr("Fehlgeschlagen", "Failed");
+    default:
+      return settings.hasWifi() ? tr("Nicht verbunden", "Not connected") : tr("Kein WLAN eingerichtet", "No Wi-Fi configured");
   }
 }
 
 String Net::reasonText(uint8_t reason) const {
   switch (reason) {
     case WIFI_REASON_NO_AP_FOUND:
-      return "Netzwerk nicht gefunden. Der ESP32-C3 kann nur 2,4-GHz-Netze; Namen pruefen und naeher an den Router gehen.";
+      return tr("Netzwerk nicht gefunden. Der ESP32-C3 kann nur 2,4-GHz-Netze; Namen pruefen und naeher an den Router gehen.",
+                "Network not found. The ESP32-C3 only supports 2.4 GHz; check the name and move closer to the router.");
     case WIFI_REASON_AUTH_FAIL:
     case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
     case WIFI_REASON_HANDSHAKE_TIMEOUT:
     case WIFI_REASON_802_1X_AUTH_FAILED:
-      return "Passwort abgelehnt. Bitte pruefen (Gross-/Kleinschreibung). Reine WPA3-Netze werden nicht unterstuetzt.";
+      return tr("Passwort abgelehnt. Bitte pruefen (Gross-/Kleinschreibung). Reine WPA3-Netze werden nicht unterstuetzt.",
+                "Password rejected. Please check it (case matters). WPA3-only networks are not supported.");
+    case WIFI_REASON_AUTH_EXPIRE:
+      return tr("Anmeldung am Router abgelaufen. Meist falsches Passwort oder zu schwacher Empfang.",
+                "Authentication with the router timed out. Usually a wrong password or a weak signal.");
     case WIFI_REASON_ASSOC_FAIL:
     case WIFI_REASON_ASSOC_EXPIRE:
     case WIFI_REASON_ASSOC_TOOMANY:
     case WIFI_REASON_CONNECTION_FAIL:
     case WIFI_REASON_BEACON_TIMEOUT:
-      return "Der Router hat die Verbindung abgebrochen. Meist zu schwacher Empfang: naeher an den Router, andere Sendeleistung probieren.";
+      return tr("Der Router hat die Verbindung abgebrochen. Meist zu schwacher Empfang: naeher an den Router, andere Sendeleistung probieren.",
+                "The router dropped the connection. Usually a weak signal: move closer, try another transmit power.");
     case 0:
-      return "Keine Antwort vom Router (Zeitueberschreitung).";
+      return tr("Keine Antwort vom Router (Zeitueberschreitung).", "No answer from the router (timeout).");
     default: {
-      String s = "Fehler " + String(reason);
+      String s = String(tr("Fehler ", "Error ")) + String(reason);
       const char *n = WiFi.disconnectReasonName((wifi_err_reason_t)reason);
       if (n && *n) s += String(" (") + n + ")";
       return s;
@@ -210,9 +228,9 @@ void Net::handleGotIp(uint32_t now) {
   if (_connectedAt != 0 && wasDown) _reconnects++;
   _connectedAt = now ? now : 1;
   _downSince = 0;
-  _lastGotIpAt = now;
   _phase = NetPhase::Connected;
   _failText = "";
+  if (_testing) _testGotIp = true;
   applyTxPower();
   startMdns();
   Serial.printf("[wifi] Verbunden: %s  IP %s  Kanal %d  RSSI %d dBm (%s)  Hostname %s\n",
@@ -221,27 +239,25 @@ void Net::handleGotIp(uint32_t now) {
 }
 
 void Net::handleDisconnect(uint32_t now, uint8_t reason) {
-  _inProgress = false;
-  _lastReason = reason;
   _lastDiscAt = now ? now : 1;
   if (_downSince == 0) _downSince = now ? now : 1;
+  if (_phase == NetPhase::Connected) _phase = NetPhase::Connecting;
+  if (reason == WIFI_REASON_ASSOC_LEAVE) {
+    // Our own WiFi.disconnect() before begin()/scan. Says nothing about the
+    // network and must not abort the connect attempt that follows it.
+    Serial.println("[wifi] Getrennt (eigene Abmeldung)");
+    return;
+  }
+  _inProgress = false;
+  _lastReason = reason;
   if (_testing) {
     _testDiscs++;
     if (reason == WIFI_REASON_AUTH_FAIL || reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT ||
         reason == WIFI_REASON_HANDSHAKE_TIMEOUT || reason == WIFI_REASON_802_1X_AUTH_FAILED)
       _testAuthFails++;
   }
-  if (_phase == NetPhase::Connected) _phase = NetPhase::Connecting;
   Serial.printf("[wifi] Getrennt (%u %s)\n", (unsigned)reason,
                 WiFi.disconnectReasonName((wifi_err_reason_t)reason));
-}
-
-void Net::renameMdns() {
-  if (_mdnsUp) {
-    MDNS.end();
-    _mdnsUp = false;
-  }
-  if (staConnected()) startMdns();
 }
 
 void Net::startMdns() {
@@ -266,7 +282,11 @@ void Net::openAp() {
   WiFi.setAutoReconnect(false);
   int channel = staConnected() ? WiFi.channel() : 1;
   const char *pw = settings.apPass.length() >= 8 ? settings.apPass.c_str() : nullptr;
-  if (!WiFi.softAP(AP_SSID, pw, channel, 0, 4)) WiFi.softAP(AP_SSID, nullptr, channel, 0, 4);
+  if (!WiFi.softAP(AP_SSID, pw, channel, 0, 4)) {
+    WiFi.softAP(AP_SSID, nullptr, channel, 0, 4);
+    pw = nullptr;
+  }
+  _apSecured = pw != nullptr;
   delay(150);
   _dns.begin(WiFi.softAPIP());
   applyTxPower();
@@ -284,6 +304,7 @@ void Net::closeAp() {
   WiFi.setAutoReconnect(true);
   _apUp = false;
   _apHoldUntil = 0;
+  _closeAt = 0;
   Serial.println("[wifi] Setup-Netz geschlossen");
 }
 
@@ -302,6 +323,11 @@ bool Net::closePortal() {
   return true;
 }
 
+void Net::closePortalSoon(uint32_t inMs) {
+  uint32_t t = millis() + inMs;
+  _closeAt = t ? t : 1;
+}
+
 void Net::forgetWifi() {
   settings.lock();
   settings.wifiSsid = "";
@@ -316,6 +342,7 @@ void Net::forgetWifi() {
 
 bool Net::startScan() {
   if (_scanRunning) return true;
+  if (_testing) return false;  // a scan would abort the connect attempt under test
   // A scan cannot start while a connect attempt is running; abort that, the
   // supervisor retries later anyway.
   if (_inProgress && !staConnected()) {
@@ -323,7 +350,7 @@ bool Net::startScan() {
     _inProgress = false;
     delay(100);
   }
-  int16_t r = WiFi.scanNetworks(true, false, false, 160);
+  int16_t r = WiFi.scanNetworks(true, false, false, SCAN_MS_PER_CHAN);
   if (r == WIFI_SCAN_FAILED) {
     _scanFailed = true;
     return false;
@@ -396,26 +423,40 @@ void Net::fillScan(JsonArray arr) {
 
 // ------------------------------------------------------------------ portal test
 
-bool Net::startTest(const String &ssid, const String &pass) {
+bool Net::startTest(const String &ssid, const String &pass, uint32_t seq) {
   if (_testing) return false;
   _testSsid = ssid;
   _testPass = pass;
+  _testSeq = seq;
   _testing = true;
   _testStart = millis();
   _testAuthFails = 0;
   _testDiscs = 0;
+  _testGotIp = false;
   _lastReason = 0;
   _failText = "";
+  _evGotIp = false;  // a GOT_IP still pending for the old network is not this test's result
+  _evLink = false;
   _restoreAfterTest = settings.hasWifi();
   // Keep (or open) the setup network so the phone can watch the result.
   if (!_apUp) openPortal(AP_GRACE_MS);
-  _evLink = false;
-  kickSta(ssid, pass);
+  if (_scanRunning) {
+    // begin() would fail while the driver scans; testLoop() kicks as soon as
+    // the scan is over.
+    _inProgress = false;
+    _lastKick = 0;
+    _lastDiscAt = 0;
+  } else {
+    kickSta(ssid, pass);
+  }
   return true;
 }
 
 void Net::finishTest(uint32_t now, bool ok, const String &why) {
   _testing = false;
+  _lastTestSeq = _testSeq;
+  _lastTestOk = ok;
+  _lastTestSsid = _testSsid;
   if (ok) {
     settings.lock();
     settings.wifiSsid = _testSsid;
@@ -439,11 +480,13 @@ void Net::finishTest(uint32_t now, bool ok, const String &why) {
 }
 
 void Net::testLoop(uint32_t now, bool up) {
-  if (up) {
+  // Success only counts when this test produced the IP (not a leftover
+  // connection to the previous network).
+  if (_testGotIp && up && WiFi.SSID() == _testSsid) {
     finishTest(now, true, "");
     return;
   }
-  if (_testAuthFails >= 2 || WiFi.status() == WL_CONNECT_FAILED) {
+  if (_testAuthFails >= 2) {
     finishTest(now, false, reasonText(_lastReason ? _lastReason : WIFI_REASON_AUTH_FAIL));
     return;
   }
@@ -453,17 +496,21 @@ void Net::testLoop(uint32_t now, bool up) {
   }
   if (_evLink && _phase == NetPhase::Connecting) _phase = NetPhase::GotLink;
   if (_phase == NetPhase::GotLink && now - _lastKick > TEST_DHCP_MS) {
-    finishTest(now, false, "Angemeldet, aber der Router hat keine IP-Adresse vergeben (DHCP). Router pruefen oder neu starten.");
+    finishTest(now, false, tr("Angemeldet, aber der Router hat keine IP-Adresse vergeben (DHCP). Router pruefen oder neu starten.",
+                              "Associated, but the router did not hand out an IP address (DHCP). Check or restart the router."));
     return;
   }
   if (now - _testStart > TEST_TIMEOUT_MS) {
     finishTest(now, false, reasonText(_lastReason));
     return;
   }
+  // begin() may fail silently (e.g. a scan was running): no event ever
+  // arrives. Treat a long silence as "try again".
+  if (_inProgress && _phase == NetPhase::Connecting && now - _lastKick > TEST_STALL_MS) _inProgress = false;
   // The core does not retry while the AP is up (auto-reconnect off); try
   // again ourselves shortly after each failure so "network not found" gets
   // a few scans before we give up.
-  if (!_inProgress && now - _lastDiscAt > 1500 && now - _lastKick > 3000) {
+  if (!_scanRunning && !_inProgress && now - _lastDiscAt > 1500 && now - _lastKick > 3000) {
     _evLink = false;
     kickSta(_testSsid, _testPass);
   }
@@ -507,7 +554,13 @@ void Net::supervise(uint32_t now, bool up) {
 }
 
 void Net::apHousekeeping(uint32_t now, bool up) {
-  if (!_apUp || _testing) return;
+  if (!_apUp) return;
+  if (_closeAt && (int32_t)(now - _closeAt) > 0) {
+    _closeAt = 0;
+    if (up && !_testing) closeAp();
+    return;
+  }
+  if (_testing) return;
   if (_apHoldUntil && (int32_t)(_apHoldUntil - now) > 0) return;
   if (!up) return;  // never take the setup network away while the station is down
   uint32_t sinceUp = now - _connectedAt;
@@ -546,11 +599,20 @@ void Net::loop() {
   }
   if (_evDisc) {
     _evDisc = false;
-    handleDisconnect(now, _evReason);
+    uint8_t r = _evReason;
+    // A disconnect that the core's auto-reconnect has already healed must not
+    // mark the link as down after the GOT_IP that followed it.
+    if (!staConnected()) handleDisconnect(now, r);
+    else if (r != WIFI_REASON_ASSOC_LEAVE) _lastReason = r;
   }
 
   bool up = staConnected();
-  if (!up && _downSince == 0) _downSince = now ? now : 1;
+  if (up) {
+    _downSince = 0;
+    if (!_testing && _phase != NetPhase::Connected) _phase = NetPhase::Connected;
+  } else if (_downSince == 0) {
+    _downSince = now ? now : 1;
+  }
 
   pollScan(now);
   if (_testing) testLoop(now, up);
@@ -570,12 +632,18 @@ void Net::fillStatus(JsonObject o) {
   o["apSsid"] = AP_SSID;
   o["apIp"] = _apUp ? WiFi.softAPIP().toString() : "";
   o["apClients"] = apClients();
-  o["apOpen"] = settings.apPass.length() == 0;
+  o["apOpen"] = !_apSecured;
   o["hasWifi"] = settings.hasWifi();
   o["testing"] = _testing;
+  o["testSeq"] = _testing ? _testSeq : _lastTestSeq;
+  o["testDone"] = !_testing && _lastTestSeq != 0;
+  o["testOk"] = _lastTestOk;
+  o["testSsid"] = _lastTestSsid;
   o["phase"] = phaseName();
   o["phaseText"] = phaseText();
   o["reason"] = _failText;
+  // Why the supervisor's last attempt failed (our own disconnects excluded).
+  o["lastReason"] = (!up && _lastReason && _lastReason != WIFI_REASON_ASSOC_LEAVE) ? reasonText(_lastReason) : String("");
   o["upSec"] = upSeconds();
   o["downSec"] = downSeconds();
   o["attempts"] = _attempts;

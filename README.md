@@ -1,166 +1,171 @@
 # Bambutton (ESP32-C3, C++)
 
-Ein physischer Knopf, der in [Bambuddy](https://bambuddy.cool) die Druckplatte freigibt.
-Die LED zeigt den Druckerzustand, ein Tastendruck meldet die Platte frei und stößt
-den nächsten Job an. **Ein ESP32-C3 bedient zwei Drucker.**
+🇬🇧 English · 🇩🇪 [Deutsch](README.de.md)
 
-## Was Version 2.0 ändert
+A physical button that clears the build plate in [Bambuddy](https://bambuddy.cool).
+The LED shows the printer state, one press acknowledges the plate and lets the next
+queued job start. **One ESP32-C3 serves two printers.** The web UI is available in
+English and German (toggle in the top right corner; the board remembers the choice).
 
-Version 2.0 ist eine Überarbeitung der WLAN-Einrichtung und der Verbindungsverwaltung.
-Die häufigsten Probleme der 1.x-Firmware und ihre Ursachen:
+## What version 2.0 changes
 
-| Problem vorher | Ursache | Jetzt |
+Version 2.0 reworks Wi-Fi setup and connection handling. The most common problems of
+the 1.x firmware and their causes:
+
+| Problem before | Cause | Now |
 |---|---|---|
-| WLAN-Einrichtung schlug oft fehl, Board blieb im Setup-Netz | Der ESP32-C3 Super Mini hat eine schlecht angepasste Antenne; mit voller Sendeleistung (19,5 dBm) kommt die Verbindung häufig gar nicht zustande. Die Firmware hat die Leistung nie begrenzt. | Sendeleistung standardmäßig 8,5 dBm (in der Oberfläche änderbar) |
-| Nach einem Stromausfall blieb das Board dauerhaft im Setup-Netz | Genau ein Verbindungsversuch von 20 s beim Start, danach nur noch Setup-Netz und nie wieder ein Versuch. Der Router braucht nach einem Stromausfall aber 1–3 Minuten. | Das Board versucht endlos, ins Heimnetz zu kommen. Das Setup-Netz erscheint nur, solange keine Verbindung steht, und schließt sich danach von selbst. |
-| Falsches Passwort → keine Rückmeldung, Board startet neu und ist weg | Speichern und Neustart ohne Test | Der Verbindungstest läuft live, während das Handy im Setup-Netz bleibt. Fehlermeldung im Klartext (Netz nicht gefunden, Passwort abgelehnt, keine IP vom Router …). Gespeichert wird nur, was funktioniert. |
-| Nach der Einrichtung war das Board nicht auffindbar | Kein mDNS, Hostname wurde nicht gesetzt | Erreichbar als `http://bambutton.local/`; IP und Name werden nach dem Verbinden angezeigt |
-| Setup-Seite öffnete sich auf manchen Handys nicht | DNS-Antworten wurden bei modernen Geräten (EDNS) verweigert, keine Umleitung der Systemabfragen | Eigener Captive-Portal-DNS, Umleitung für Android, iOS und Windows |
-| Oberfläche und Knöpfe froren bei „Drucker laden“ / „Knopf testen“ ein; Watchdog-Neustart alle 3 Minuten im Setup-Modus | Bambuddy-Aufrufe liefen im Hauptprogramm; der Bambuddy-Task wurde im Setup-Modus nie gestartet, sein Herzschlag blieb stehen | Alle Bambuddy-Aufrufe laufen im Hintergrund-Task, die Seite fragt das Ergebnis ab |
-| Tastendruck wurde Minuten später ausgeführt, wenn das WLAN zurückkam | Druck blieb unbegrenzt in der Warteschlange | Druck verfällt nach 10 s; die LED flackert kurz, wenn er nicht zugestellt werden konnte |
-| „Knopf testen“ meldete Fehler, obwohl alles ging | Bambuddy antwortet mit HTTP 400, wenn kein Druck auf die Freigabe wartet | Wird als „Verbindung OK, nichts zu räumen“ angezeigt |
+| Wi-Fi setup often failed, the board stayed in the setup network | The ESP32-C3 Super Mini has a badly matched antenna; at full transmit power (19.5 dBm) the connection often never comes up. The firmware never limited the power. | Transmit power defaults to 8.5 dBm (changeable in the UI) |
+| After a power cut the board stayed in the setup network for good | Exactly one 20 s connection attempt at boot, then the setup network and never another try. A router needs 1–3 minutes after a power cut. | The board keeps trying to join the home network forever. The setup network only appears while there is no connection and closes again by itself. |
+| Wrong password → no feedback, the board restarted and was gone | Save and restart without a test | The connection is tested live while the phone stays on the setup network. Errors in plain words (network not found, password rejected, no IP from the router …). Only working credentials are stored. |
+| The board could not be found after setup | No mDNS, hostname never applied | Reachable as `http://bambutton.local/`; IP and name are shown right after connecting |
+| The setup page did not open on some phones | DNS replies were refused for modern devices (EDNS), no redirect for the OS connectivity probes | Own captive-portal DNS, redirects for Android, iOS and Windows |
+| UI and buttons froze on "load printers" / "test button"; watchdog reboot every 3 minutes in setup mode | Bambuddy calls ran on the main loop; the Bambuddy task never started in setup mode, so its heartbeat stalled | All Bambuddy calls run in the background task; the page polls for the result |
+| A button press fired minutes later when Wi-Fi came back | The press waited in the queue indefinitely | A press expires after 30 s; the LED flickers briefly if it could not be delivered |
+| "Test button" reported an error although everything worked | Bambuddy answers HTTP 400 when no print is waiting for the acknowledgement | Shown as "connection OK, nothing to clear" |
 
-Weiterhin dabei: WLAN-Stromsparmodus aus, alle Fehler in der Weboberfläche, eine
-`firmware.bin` (im Browser flashbar, danach OTA), Watchdog gegen Hänger.
+Still included: Wi-Fi power save off, every error visible in the web UI, a single
+`firmware.bin` (flashable from the browser, OTA afterwards), watchdog against hangs.
 
-## Installieren
+## Install
 
-**Der einfachste Weg:** die Flash-Seite öffnen —
+**The easiest way:** open the flash page —
 
 ### 👉 https://thomansky.github.io/bambutton-better/
 
-Board per Datenkabel anstecken, „Verbinden & installieren" klicken, fertig.
-Chrome oder Edge am Desktop nötig (Web Serial); Firefox und Safari können das nicht.
+Plug the board in with a data cable, click "Connect & install", done.
+Needs Chrome or Edge on a desktop (Web Serial); Firefox and Safari cannot do this.
 
-Alternativ lokal:
+Alternatively, locally:
 
 ```bash
 pio run -t upload
 ```
 
-## Einrichten
+## Setup
 
-1. Nach dem Flashen öffnet das Board das WLAN **`Bambutton-Setup`** (ohne Passwort;
-   in der Oberfläche lässt sich später eines setzen).
-2. Handy damit verbinden. Die Einrichtungsseite öffnet sich von selbst; falls nicht,
-   im Browser **http://192.168.4.1/** eingeben.
-3. Dein WLAN aus der Liste wählen (nur 2,4 GHz), Passwort eingeben, optional den
-   Gerätenamen ändern, **„Verbinden & speichern"**. Das Board probiert die Verbindung
-   sofort aus, während dein Handy im Setup-Netz bleibt. Nach wenigen Sekunden steht
-   das Ergebnis auf der Seite: bei Erfolg **IP-Adresse und Name** (z. B.
-   `http://bambutton.local/`), bei Misserfolg der Grund.
-4. Handy oder PC wieder mit dem Heimnetz verbinden und `http://bambutton.local/`
-   (oder die angezeigte IP) öffnen. Das Setup-Netz schließt sich etwa 90 s nach der
-   erfolgreichen Verbindung von selbst.
-5. Bambuddy-Adresse (`IP:Port`) und API-Key eintragen, **„Verbindung testen & Drucker
-   laden"**, den zwei Knöpfen Drucker zuordnen, speichern.
+1. After flashing, the board opens the Wi-Fi network **`Bambutton-Setup`** (no password;
+   one can be set later in the UI).
+2. Connect your phone to it. The setup page opens by itself; if it does not, enter
+   **http://192.168.4.1/** in the browser.
+3. Pick your Wi-Fi from the list (2.4 GHz only), enter the password, optionally change
+   the device name, **"Connect & save"**. The board tries the connection right away while
+   your phone stays on the setup network. After a few seconds the result is on the page:
+   on success the **IP address and name** (e.g. `http://bambutton.local/`), on failure
+   the reason. If your phone closes the setup view during the switch, simply reopen it.
+4. Reconnect phone or PC to the home network and open `http://bambutton.local/` (or the
+   IP shown). The setup network closes by itself once you have left it (90 s after
+   connecting at the earliest, 5 minutes at the latest), or immediately via the button
+   on the page.
+5. Enter the Bambuddy address (`IP:port`) and API key, **"Test connection & load
+   printers"**, assign printers to the two buttons, save.
 
-Der API-Key wird in Bambuddy unter *Settings → API Keys* angelegt und braucht die
-Rechte **printers:read** und **printers:clear_plate**.
+The API key is created in Bambuddy under *Settings → API Keys* and needs the permissions
+**printers:read** and **printers:clear_plate**.
 
-### Wann das Setup-Netz erscheint und wann es verschwindet
+### When the setup network appears and when it disappears
 
-- Es ist offen, solange **kein WLAN gespeichert** ist.
-- Es erscheint **automatisch**, wenn das gespeicherte WLAN beim Start nach 30 s nicht
-  erreichbar ist oder später für mehr als eine Minute wegbleibt. Das Board versucht
-  parallel weiter, ins Heimnetz zu kommen (Stromausfall: der Router kommt irgendwann
-  wieder, das Board verbindet sich dann ohne Zutun).
-- Es **schließt sich von selbst**, sobald das Heimnetz steht: 90 s nach dem Verbinden,
-  wenn niemand mehr im Setup-Netz ist, spätestens nach 5 Minuten.
-- Es lässt sich jederzeit in der Oberfläche (Erweitert → „Setup-Netz für 10 Minuten
-  öffnen") oder durch **Halten von Knopf A beim Einschalten** öffnen.
-- Ohne jede Verbindung startet das Board nach 30 Minuten neu, sofern niemand im
-  Setup-Netz ist (Selbstheilung, falls sich der WLAN-Stack verhakt hat).
+- It is open as long as **no Wi-Fi is stored**.
+- It appears **automatically** when the stored Wi-Fi is not reachable 30 s after boot,
+  or later drops out for more than a minute. The board keeps trying to reach the home
+  network in parallel (power cut: the router eventually comes back and the board
+  connects without any action).
+- It **closes by itself** once the home network is up: 90 s after connecting when nobody
+  is on the setup network any more, 5 minutes after connecting at the latest.
+- It can be opened any time in the UI (Advanced → "Open setup network for 10 minutes")
+  or by **holding button A while powering on** (then it stays open for 5 minutes
+  regardless of the home network).
+- If a Wi-Fi is stored and no connection comes up for 30 minutes, the board restarts,
+  provided nobody is on the setup network (self-healing in case the Wi-Fi stack got
+  stuck).
 
-## Verdrahtung
+## Wiring
 
 ```
-Knopf A:  LED = GPIO3,  Taster = GPIO4
-Knopf B:  LED = GPIO5,  Taster = GPIO6
+Button A:  LED = GPIO3,  switch = GPIO4
+Button B:  LED = GPIO5,  switch = GPIO6
 ```
 
-Taster gegen `3V3` (interner Pull-down, Auslösung bei steigender Flanke),
-LED über Vorwiderstand gegen `GND`. Keine 5 V an die GPIOs. Die Pins sind in der
-Firmware festgelegt (`src/Settings.cpp`).
+Switch to `3V3` (internal pull-down, triggers on the rising edge), LED through a
+series resistor to `GND`. No 5 V on the GPIOs. The pins are fixed in the firmware
+(`src/Settings.cpp`).
 
-## LED-Bedeutung
+## LED meaning
 
-| Muster | Bedeutung |
+| Pattern | Meaning |
 |---|---|
-| aus | kein Drucker zugeordnet (oder Ruhezustand „immer aus“) |
-| folgt dem Kammerlicht | Normalbetrieb (umstellbar auf „immer an“ / „immer aus“) |
-| langsames Blinken (0,4 s) | Platte muss geräumt werden |
-| sehr schnelles Blinken | Anfrage an Bambuddy läuft gerade |
-| zwei ruhige Blinker nach dem Druck | Bambuddy hat die Freigabe angenommen |
-| kurzes Flackern nach dem Druck | Freigabe abgelehnt oder nicht zustellbar (kein WLAN, Bambuddy nicht erreichbar, Drucker wartet nicht) |
-| kurzer Blitz alle 2 s | keine Verbindung: kein WLAN oder Bambuddy antwortet nicht |
-| schnelles Blinken auf Knopfdruck in der Oberfläche | „Identify" — zeigt, welcher Knopf gemeint ist |
+| off | no printer assigned (or idle mode "always off") |
+| follows the chamber light | normal operation (switchable to "always on" / "always off") |
+| slow blink (0.4 s) | plate needs clearing |
+| very fast blink | request to Bambuddy in flight |
+| two calm blinks after a press | Bambuddy accepted the acknowledgement |
+| short flicker after a press | rejected or undeliverable (no Wi-Fi, Bambuddy unreachable, printer not waiting) |
+| short flash every 2 s | no link: no Wi-Fi or Bambuddy not answering |
+| fast blink on request from the UI | "identify" — shows which button is meant |
 
-## Diagnose
+## Diagnostics
 
-Der Bereich **Status & Diagnose** in der Weboberfläche zeigt live: WLAN-Zustand mit
-Empfangsqualität, Grund des letzten fehlgeschlagenen Verbindungsversuchs, ob das
-Setup-Netz offen ist, pro Knopf den Drucker (online/offline, Zustand, Platte, Licht)
-und den letzten Fehler, sowie Zahl und Fehler der Bambuddy-Abfragen.
-**„Knopf jetzt testen"** löst exakt denselben `clear-plate`-Aufruf aus wie ein echter
-Tastendruck und zeigt HTTP-Status, Antwort und Dauer — ohne serielle Konsole.
+The **Status & diagnostics** section of the web UI shows live: Wi-Fi state with signal
+quality, the reason of the last failed connection attempt, whether the setup network is
+open, per button the printer (online/offline, state, plate, light) and its last error,
+and the number of Bambuddy polls and errors. **"Test button now"** fires exactly the same
+`clear-plate` call as a real press and shows HTTP status, answer and duration — no serial
+console needed.
 
-Die serielle Konsole (115200 Baud) protokolliert zusätzlich jedes WLAN-Ereignis mit
-Grund, alle 30 s eine Gesundheitszeile (Heap, RSSI, Setup-Netz, Abfragen) und jeden
-Bambuddy-Fehler.
+The serial console (115200 baud) additionally logs every Wi-Fi event with its reason, a
+health line every 30 s (heap, RSSI, setup network, polls) and every Bambuddy error.
 
-## Fehlersuche
+## Troubleshooting
 
-**Verbindung zum WLAN klappt nicht**
-- Der ESP32-C3 kann nur **2,4 GHz**. Bei Routern mit gemeinsamem Namen für 2,4 und
-  5 GHz funktioniert es meist trotzdem; sonst ein reines 2,4-GHz-Netz anlegen.
-- „Passwort abgelehnt" trotz richtigem Passwort: reine **WPA3**-Netze werden nicht
-  unterstützt, WPA2 oder WPA2/WPA3-Mischbetrieb einstellen.
-- „Router hat die Verbindung abgebrochen" / „Netzwerk nicht gefunden" bei kurzer
-  Entfernung: **Sendeleistung** unter *Erweitert* prüfen. 8,5 dBm ist für den Super Mini
-  fast immer die beste Wahl; höhere Werte verschlechtern die Verbindung häufig.
-- Schlechte USB-Stromversorgung (dünnes Kabel, schwaches Netzteil) lässt das Board beim
-  Senden abstürzen — anderes Kabel/Netzteil probieren.
-- Versteckte Netze: „anderes Netz (manuell)" wählen und den Namen eintippen.
+**Cannot connect to Wi-Fi**
+- The ESP32-C3 only does **2.4 GHz**. Routers that use one name for 2.4 and 5 GHz usually
+  work anyway; otherwise create a dedicated 2.4 GHz network.
+- "Password rejected" although the password is right: **WPA3-only** networks are not
+  supported, use WPA2 or WPA2/WPA3 mixed mode.
+- "The router dropped the connection" / "network not found" at short range: check the
+  **transmit power** under *Advanced*. 8.5 dBm is almost always the best choice for the
+  Super Mini; higher values frequently make the connection worse.
+- A weak USB supply (thin cable, weak charger) makes the board reset while transmitting —
+  try another cable or charger.
+- Hidden networks: choose "other network (manual)" and type the name.
 
-**Setup-Seite öffnet sich nicht von selbst**
-- Im Browser `http://192.168.4.1/` eingeben. Mobile Daten kurz abschalten, wenn das
-  Handy sonst über LTE ins Internet geht.
+**The setup page does not open by itself**
+- Enter `http://192.168.4.1/` in the browser. Switch mobile data off briefly if the phone
+  otherwise reaches the internet via LTE.
 
-**Board nach der Einrichtung nicht auffindbar**
-- `http://bambutton.local/` funktioniert auf iPhone, Mac, Windows 10/11 und den meisten
-  Android-Geräten; sonst die auf der Setup-Seite angezeigte IP verwenden oder im
-  Router unter dem Hostnamen (Standard `bambutton`) nachsehen.
+**Board cannot be found after setup**
+- `http://bambutton.local/` works on iPhone, Mac, Windows 10/11 and most Android devices;
+  otherwise use the IP shown on the setup page or look in the router for the hostname
+  (default `bambutton`; a new name shows up in the router after the next connection).
 
-**Bambuddy-Fehler**
-- *HTTP 401/403*: API-Key falsch oder ohne die Rechte `printers:read` /
+**Bambuddy errors**
+- *HTTP 401/403*: API key wrong or lacking the permissions `printers:read` /
   `printers:clear_plate`.
-- *HTTP 404*: Adresse zeigt nicht auf Bambuddy oder die Drucker-ID existiert nicht mehr.
-- *HTTP 400 beim Test*: kein Fehler — der Drucker wartet gerade nicht auf eine
-  Plattenfreigabe.
-- *HTTP 429*: Bambuddy begrenzt Abfragen (100/min); das Board schaltet automatisch für
-  zwei Minuten auf ein längeres Intervall. Intervall in Schritt 2 erhöhen.
-- *Keine Verbindung / Zeitüberschreitung*: Adresse als `IP:Port` (z. B.
-  `192.168.1.50:8000`), kein `https`, Firewall des Bambuddy-Rechners prüfen.
+- *HTTP 404*: the address does not point at Bambuddy or the printer ID no longer exists.
+- *HTTP 400 on test*: not an error — the printer is not waiting for a plate clear.
+- *HTTP 429*: Bambuddy limits requests (100/min); the board automatically switches to a
+  longer interval for two minutes. Raise the interval in step 2.
+- *No connection / timeout*: address as `IP:port` (e.g. `192.168.1.50:8000`), no
+  `https`, check the firewall of the Bambuddy host.
 
-## Firmware-Update
+## Firmware update
 
-- **Über die Oberfläche:** neue `firmware.bin` hochladen (Erweitert), das Board startet
-  neu. Falsche Dateien (bootloader.bin, partitions.bin) werden abgewiesen.
-- **Über den Browser:** erneut über die Flash-Seite installieren. Einstellungen bleiben
-  erhalten, wenn beim Flashen nicht „Erase" gewählt wird.
+- **Via the UI:** upload a new `firmware.bin` (Advanced), the board restarts. Wrong files
+  (bootloader.bin, partitions.bin) are rejected.
+- **Via the browser:** install again from the flash page. Settings survive when "Erase"
+  is not selected while flashing.
 
-## Selbst bauen
+## Build it yourself
 
 ```bash
 pip install platformio
-pio run                 # baut .pio/build/esp32-c3-super-mini/firmware.bin
-pio device monitor      # serielle Ausgabe, 115200 Baud
+pio run                 # builds .pio/build/esp32-c3-super-mini/firmware.bin
+pio device monitor      # serial output, 115200 baud
 ```
 
-GitHub Actions baut die Firmware bei jedem Push automatisch und hängt die Binärdateien
-an jeden Tag (`v*`) als Release an.
+GitHub Actions builds the firmware on every push to `main`, on pull requests and on tags
+(`v*`); binaries are attached to every tag as a release and the flash page is published
+from `main` to GitHub Pages.
 
-## Lizenz
+## License
 
 MIT

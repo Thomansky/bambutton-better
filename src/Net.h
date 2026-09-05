@@ -54,9 +54,10 @@ class Net {
   void loop();
 
   // ---- setup portal actions
-  bool startTest(const String &ssid, const String &pass);  // false while another test runs
+  bool startTest(const String &ssid, const String &pass, uint32_t seq);  // false while another test runs
   bool openPortal(uint32_t holdMs);                         // open the setup network on demand
   bool closePortal();                                       // only allowed while the station is connected
+  void closePortalSoon(uint32_t inMs);                      // same, but after the HTTP reply went out
   void forgetWifi();                                        // erase credentials (caller reboots)
   bool startScan();
   bool scanning();
@@ -76,7 +77,6 @@ class Net {
   String currentSsid() const;
   IPAddress apIp() const { return WiFi.softAPIP(); }
   int apClients() const { return _apUp ? WiFi.softAPgetStationNum() : 0; }
-  bool isApClient(IPAddress ip) const;
   uint32_t upSeconds() const;
   uint32_t downSeconds() const;
   uint32_t attempts() const { return _attempts; }
@@ -84,7 +84,7 @@ class Net {
   int rssi() const { return staConnected() ? WiFi.RSSI() : 0; }
   String rssiText() const;
   void applyTxPower();
-  void renameMdns();                 // after the hostname changed
+  void applyHostname();              // after the hostname changed (DHCP name + mDNS)
   void fillStatus(JsonObject o);     // everything the UI wants to know
 
  private:
@@ -104,15 +104,15 @@ class Net {
 
   CaptiveDns _dns;
   std::vector<ScanEntry> _scan;
-  String _testSsid, _testPass, _failText;
+  String _testSsid, _testPass, _failText, _lastTestSsid;
   NetPhase _phase = NetPhase::Idle;
 
-  bool _apUp = false, _staWanted = false, _testing = false, _inProgress = false;
+  bool _apUp = false, _apSecured = false, _staWanted = false, _testing = false, _inProgress = false;
   bool _mdnsUp = false, _scanRunning = false, _scanDone = false, _scanFailed = false;
-  bool _restoreAfterTest = false;
+  bool _restoreAfterTest = false, _testGotIp = false, _lastTestOk = false;
   uint32_t _bootAt = 0, _connectedAt = 0, _downSince = 0, _lastKick = 0, _lastDiscAt = 0;
-  uint32_t _testStart = 0, _apOpenedAt = 0, _apHoldUntil = 0, _scanStartedAt = 0, _lastGotIpAt = 0;
-  uint32_t _attempts = 0, _reconnects = 0;
+  uint32_t _testStart = 0, _apOpenedAt = 0, _apHoldUntil = 0, _closeAt = 0, _scanStartedAt = 0;
+  uint32_t _attempts = 0, _reconnects = 0, _testSeq = 0, _lastTestSeq = 0;
   uint8_t _lastReason = 0, _testAuthFails = 0, _testDiscs = 0;
 
   // written by the Wi-Fi event task, consumed in loop()

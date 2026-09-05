@@ -12,6 +12,9 @@ struct StationCfg {
 // What the LED shows while nothing special is going on.
 enum IdleLed : uint8_t { IDLE_FOLLOW_LIGHT = 0, IDLE_ON = 1, IDLE_OFF = 2 };
 
+// UI language. Firmware-generated messages follow it too.
+enum Lang : uint8_t { LANG_DE = 0, LANG_EN = 1 };
+
 class Settings {
  public:
   String wifiSsid;
@@ -25,13 +28,14 @@ class Settings {
   uint32_t pollIntervalMs = 3000;
   // Clearing a plate makes Bambuddy talk to the printer, which can take
   // several seconds. A short timeout is the classic cause of "the button
-  // stops blinking but nothing happens".
+  // stops blinking but nothing happens". Status polls use a shorter one.
   uint32_t httpTimeoutMs = 20000;
   // Wi-Fi transmit power in wifi_power_t units (quarter dBm). The ESP32-C3
   // Super Mini's antenna is badly matched; at full power (78 = 19.5 dBm) many
   // boards cannot connect at all. 34 = 8.5 dBm is the widely used fix.
   int8_t txPower = 34;
   uint8_t idleLed = IDLE_FOLLOW_LIGHT;
+  uint8_t lang = LANG_DE;
 
   void load();
   void save();
@@ -54,3 +58,6 @@ class Settings {
 };
 
 extern Settings settings;
+
+// Pick the text for the configured language.
+inline const char *tr(const char *de, const char *en) { return settings.lang == LANG_EN ? en : de; }

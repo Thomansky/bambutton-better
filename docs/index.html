@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bambutton flashen</title>
+<title>Bambutton</title>
 <style>
 :root{--bg:#f1f5f9;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--acc:#2563eb}
 @media(prefers-color-scheme:dark){:root{--bg:#0f172a;--card:#1e293b;--ink:#f1f5f9;--mut:#94a3b8;--line:#334155}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 .wrap{max-width:640px;margin:0 auto;padding:32px 20px 64px}
-h1{font-size:28px;margin:0 0 6px}
+h1{font-size:28px;margin:0 0 6px;display:flex;align-items:center}
 .sub{color:var(--mut);margin:0 0 28px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:18px}
 h2{font-size:17px;margin:0 0 10px}
@@ -18,56 +18,100 @@ ol{margin:0;padding-left:20px}li{margin:6px 0}
 code{background:var(--bg);padding:2px 6px;border-radius:5px;font-size:14px;border:1px solid var(--line)}
 .note{color:var(--mut);font-size:14px}
 .center{text-align:center;padding:8px 0}
+.lang{margin-left:auto;font-size:13px;font-weight:400}.lang a{color:var(--mut);text-decoration:none;padding:3px 8px;border:1px solid var(--line);border-radius:6px}
+.lang a.on{color:var(--ink);border-color:var(--acc)}
+[data-l]{display:none}html[lang="de"] [data-l="de"],html[lang="en"] [data-l="en"]{display:block}
+span[data-l]{display:none}html[lang="de"] span[data-l="de"],html[lang="en"] span[data-l="en"]{display:inline}
 </style>
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 </head>
 <body><div class="wrap">
 
-<h1>Bambutton</h1>
-<p class="sub">Ein physischer Knopf, der in Bambuddy die Druckplatte freigibt — für zwei Drucker an einem ESP32-C3.</p>
+<h1>Bambutton <span class="lang"><a href="#" id="lde" onclick="return setLang('de')">DE</a> <a href="#" id="len" onclick="return setLang('en')">EN</a></span></h1>
+<p class="sub">
+  <span data-l="de">Ein physischer Knopf, der in Bambuddy die Druckplatte freigibt — für zwei Drucker an einem ESP32-C3.</span>
+  <span data-l="en">A physical button that clears the build plate in Bambuddy — two printers on one ESP32-C3.</span>
+</p>
 
 <div class="card">
-  <h2>Firmware installieren</h2>
-  <ol>
-    <li>ESP32-C3 per <strong>Datenkabel</strong> an den Rechner stecken.</li>
-    <li>Auf den Knopf unten klicken und den seriellen Port auswählen.</li>
-  </ol>
+  <h2><span data-l="de">Firmware installieren</span><span data-l="en">Install the firmware</span></h2>
+  <div data-l="de">
+    <ol>
+      <li>ESP32-C3 per <strong>Datenkabel</strong> an den Rechner stecken.</li>
+      <li>Auf den Knopf unten klicken und den seriellen Port auswählen.</li>
+    </ol>
+  </div>
+  <div data-l="en">
+    <ol>
+      <li>Connect the ESP32-C3 to the computer with a <strong>data cable</strong>.</li>
+      <li>Click the button below and pick the serial port.</li>
+    </ol>
+  </div>
   <div class="center">
     <esp-web-install-button manifest="manifest.json">
       <button slot="activate" style="padding:12px 22px;border:0;border-radius:9px;background:var(--acc);color:#fff;font-size:16px;font-weight:600;cursor:pointer">
-        Verbinden &amp; installieren
+        <span data-l="de">Verbinden &amp; installieren</span><span data-l="en">Connect &amp; install</span>
       </button>
-      <span slot="unsupported">Dieser Browser kann nicht flashen — bitte Chrome oder Edge am Desktop verwenden.</span>
-      <span slot="not-allowed">Das Flashen braucht eine sichere Verbindung (HTTPS).</span>
+      <span slot="unsupported"><span data-l="de">Dieser Browser kann nicht flashen — bitte Chrome oder Edge am Desktop verwenden.</span><span data-l="en">This browser cannot flash — please use Chrome or Edge on a desktop.</span></span>
+      <span slot="not-allowed"><span data-l="de">Das Flashen braucht eine sichere Verbindung (HTTPS).</span><span data-l="en">Flashing needs a secure connection (HTTPS).</span></span>
     </esp-web-install-button>
   </div>
-  <p class="note">Funktioniert in Chrome und Edge über Web Serial. Firefox und Safari unterstützen das nicht.
-  Beim Update einer bereits eingerichteten Firmware „Erase" abwählen, dann bleiben WLAN und Bambuddy-Einstellungen erhalten.</p>
+  <p class="note" data-l="de">Funktioniert in Chrome und Edge über Web Serial. Firefox und Safari unterstützen das nicht.
+  Beim Update einer bereits eingerichteten Firmware „Erase“ abwählen, dann bleiben WLAN und Bambuddy-Einstellungen erhalten.</p>
+  <p class="note" data-l="en">Works in Chrome and Edge via Web Serial. Firefox and Safari do not support it.
+  When updating an already configured board, untick “Erase” so Wi-Fi and Bambuddy settings survive.</p>
 </div>
 
 <div class="card">
-  <h2>Danach einrichten</h2>
-  <ol>
-    <li>Das Board öffnet das WLAN <code>Bambutton-Setup</code> (ohne Passwort).</li>
-    <li>Mit dem Handy verbinden — die Einrichtungsseite öffnet sich von selbst. Falls nicht: <code>http://192.168.4.1/</code> im Browser eingeben.</li>
-    <li>WLAN auswählen (nur 2,4 GHz), Passwort eingeben, <strong>„Verbinden &amp; speichern"</strong>. Das Board probiert die Verbindung sofort aus und zeigt das Ergebnis samt IP-Adresse an; bei einem Fehler steht der Grund dabei.</li>
-    <li>Handy oder PC zurück ins Heimnetz und <code>http://bambutton.local/</code> (oder die angezeigte IP) öffnen: Bambuddy-Adresse und API-Key eintragen, Drucker laden, den Knöpfen zuordnen.</li>
-  </ol>
-  <p class="note">Das Setup-Netz schließt sich nach der erfolgreichen Verbindung von selbst und erscheint nur wieder, wenn das Heimnetz länger nicht erreichbar ist. Knopf A beim Einschalten gedrückt halten öffnet es jederzeit.</p>
+  <h2><span data-l="de">Danach einrichten</span><span data-l="en">Then set it up</span></h2>
+  <div data-l="de">
+    <ol>
+      <li>Das Board öffnet das WLAN <code>Bambutton-Setup</code> (ohne Passwort).</li>
+      <li>Mit dem Handy verbinden — die Einrichtungsseite öffnet sich von selbst. Falls nicht: <code>http://192.168.4.1/</code> im Browser eingeben.</li>
+      <li>WLAN auswählen (nur 2,4 GHz), Passwort eingeben, <strong>„Verbinden &amp; speichern“</strong>. Das Board probiert die Verbindung sofort aus und zeigt das Ergebnis samt IP-Adresse an; bei einem Fehler steht der Grund dabei.</li>
+      <li>Handy oder PC zurück ins Heimnetz und <code>http://bambutton.local/</code> (oder die angezeigte IP) öffnen: Bambuddy-Adresse und API-Key eintragen, Drucker laden, den Knöpfen zuordnen.</li>
+    </ol>
+    <p class="note">Das Setup-Netz schließt sich nach der erfolgreichen Verbindung von selbst und erscheint nur wieder, wenn das Heimnetz länger nicht erreichbar ist. Knopf A beim Einschalten gedrückt halten öffnet es jederzeit. Die Oberfläche gibt es auf Deutsch und Englisch.</p>
+  </div>
+  <div data-l="en">
+    <ol>
+      <li>The board opens the Wi-Fi network <code>Bambutton-Setup</code> (no password).</li>
+      <li>Connect your phone — the setup page opens by itself. If not, enter <code>http://192.168.4.1/</code> in the browser.</li>
+      <li>Pick your Wi-Fi (2.4 GHz only), enter the password, <strong>“Connect &amp; save”</strong>. The board tries the connection right away and shows the result including the IP address; on failure it shows the reason.</li>
+      <li>Reconnect phone or PC to the home network and open <code>http://bambutton.local/</code> (or the IP shown): enter the Bambuddy address and API key, load printers, assign them to the buttons.</li>
+    </ol>
+    <p class="note">The setup network closes by itself after a successful connection and only reappears when the home network is unreachable for a while. Holding button A while powering on opens it any time. The web UI is available in English and German.</p>
+  </div>
 </div>
 
 <div class="card">
-  <h2>Verdrahtung</h2>
-  <ol>
-    <li>Knopf A: LED an <code>GPIO3</code>, Taster an <code>GPIO4</code></li>
-    <li>Knopf B: LED an <code>GPIO5</code>, Taster an <code>GPIO6</code></li>
-  </ol>
-  <p class="note">Taster jeweils gegen <code>3V3</code> (interner Pull-down), LED über einen Vorwiderstand gegen <code>GND</code>.</p>
+  <h2><span data-l="de">Verdrahtung</span><span data-l="en">Wiring</span></h2>
+  <div data-l="de">
+    <ol>
+      <li>Knopf A: LED an <code>GPIO3</code>, Taster an <code>GPIO4</code></li>
+      <li>Knopf B: LED an <code>GPIO5</code>, Taster an <code>GPIO6</code></li>
+    </ol>
+    <p class="note">Taster jeweils gegen <code>3V3</code> (interner Pull-down), LED über einen Vorwiderstand gegen <code>GND</code>.</p>
+  </div>
+  <div data-l="en">
+    <ol>
+      <li>Button A: LED on <code>GPIO3</code>, switch on <code>GPIO4</code></li>
+      <li>Button B: LED on <code>GPIO5</code>, switch on <code>GPIO6</code></li>
+    </ol>
+    <p class="note">Each switch to <code>3V3</code> (internal pull-down), each LED through a series resistor to <code>GND</code>.</p>
+  </div>
 </div>
 
 <p class="note" style="text-align:center;margin-top:28px">
-  Quellcode, Schaltplan und Doku:
+  <span data-l="de">Quellcode, Schaltplan und Doku:</span><span data-l="en">Source code, wiring and docs:</span>
   <a href="https://github.com/Thomansky/bambutton-better">github.com/Thomansky/bambutton-better</a>
 </p>
 
-</div></body></html>
+</div>
+<script>
+function setLang(l){document.documentElement.lang=l;try{localStorage.setItem('lang',l)}catch(e){}
+  document.getElementById('lde').className=l==='de'?'on':'';document.getElementById('len').className=l==='en'?'on':'';return false}
+var l='de';try{l=localStorage.getItem('lang')||((navigator.language||'').slice(0,2)==='de'?'de':'en')}catch(e){}
+setLang(l);
+</script>
+</body></html>
