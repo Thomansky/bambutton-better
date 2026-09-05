@@ -73,7 +73,7 @@ Rechte **printers:read** und **printers:clear_plate**.
 
 ### Wann das Setup-Netz erscheint und wann es verschwindet
 
-- Es ist offen, solange **kein WLAN gespeichert** ist.
+- Es ist **nach dem Start offen, wenn kein WLAN gespeichert** ist (bis zur Abschaltung unten).
 - Es erscheint **automatisch**, wenn das gespeicherte WLAN beim Start nach 30 s nicht
   erreichbar ist oder später für mehr als eine Minute wegbleibt. Das Board versucht
   parallel weiter, ins Heimnetz zu kommen (Stromausfall: der Router kommt irgendwann

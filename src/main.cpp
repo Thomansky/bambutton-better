@@ -95,7 +95,9 @@ static void recordClear(int idx, const ApiResult &r) {
   else s += String(tr("FEHLER nach ", "FAILED after ")) + String(r.ms) + " ms: " + r.error;
   lockedCopy(diag.lastClear, sizeof(diag.lastClear), s);
   if (!r.ok && !r.notAwaiting) lockedCopy(diag.lastError, sizeof(diag.lastError), s);
-  Serial.println("[bambuddy] " + s);
+  // One write, not println()'s two: an Improv packet from the loop task must
+  // never land between a log line and its newline (the host frames on newlines).
+  Serial.printf("[bambuddy] %s\n", s.c_str());
 }
 
 static void pollStation(int i) {

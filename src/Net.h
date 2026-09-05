@@ -32,7 +32,11 @@ class CaptiveDns {
 //    new network …) the setup network is opened *in addition* and the station
 //    keeps retrying in the background. As soon as the station connects, the
 //    setup network closes again by itself.
-//  * Boot without credentials (or button A held): setup network only.
+//  * Boot without credentials (or button A held): setup network only. Without
+//    a station link the setup network closes by itself after
+//    settings.apTimeoutMin minutes (0 = never) once no client is attached;
+//    _apTimedOut then keeps supervise() from reopening it as fallback until
+//    openPortal() (button, UI, USB) or handleGotIp() clears the flag.
 //  * Portal "connect": credentials are tried live while the phone stays on the
 //    setup network; only a successful connection is stored. The result (IP,
 //    hostname, signal) is shown before the setup network goes away.

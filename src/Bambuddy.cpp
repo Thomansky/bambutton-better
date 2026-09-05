@@ -74,7 +74,8 @@ static String readBody(HTTPClient &http, WiFiClient &client, uint32_t timeoutMs,
 }
 
 ApiResult Bambuddy::request(bool post, const String &path, String *bodyOut,
-                            const String &host, const String &key, uint32_t timeoutMs) {
+                            const String &host, const String &key, uint32_t timeoutMs,
+                            JsonDocument *streamDoc, JsonDocument *filter) {
   ApiResult r;
   uint32_t t0 = millis();
 
@@ -120,16 +121,30 @@ ApiResult Bambuddy::request(bool post, const String &path, String *bodyOut,
   r.status = code;
 
   if (code > 0) {
-    bool truncated = false;
-    String b = readBody(http, client, timeoutMs, truncated);
     r.ok = (code >= 200 && code < 300);
-    if (!r.ok) r.detail = detailFrom(b);  // from the complete body, before the excerpt is cut
-    r.body = b.length() > 300 ? b.substring(0, 300) : b;
-    if (bodyOut) *bodyOut = std::move(b);
-    if (r.ok && truncated) {
-      r.ok = false;
-      r.error = String(tr("Antwort größer als ", "Response larger than ")) + String(BODY_CAP / 1024) +
-                tr(" KB — abgeschnitten", " KB — truncated");
+    if (r.ok && streamDoc) {
+      // Parse while receiving: a status document with AMS trays, HMS errors
+      // and filament data can exceed any sensible RAM buffer; the filter keeps
+      // only the handful of fields we use. The socket read timeout HTTPClient
+      // installed bounds a stalled server (IncompleteInput after ~timeoutMs).
+      DeserializationError e = filter
+          ? deserializeJson(*streamDoc, http.getStream(), DeserializationOption::Filter(*filter))
+          : deserializeJson(*streamDoc, http.getStream());
+      if (e) {
+        r.ok = false;
+        r.error = String(tr("Antwort ist kein gültiges JSON (", "Response is not valid JSON (")) + e.c_str() + ")";
+      }
+    } else {
+      bool truncated = false;
+      String b = readBody(http, client, timeoutMs, truncated);
+      if (!r.ok) r.detail = detailFrom(b);  // from the complete body, before the excerpt is cut
+      r.body = b.length() > 300 ? b.substring(0, 300) : b;
+      if (bodyOut) *bodyOut = std::move(b);
+      if (r.ok && truncated) {
+        r.ok = false;
+        r.error = String(tr("Antwort größer als ", "Response larger than ")) + String(BODY_CAP / 1024) +
+                  tr(" KB — abgeschnitten", " KB — truncated");
+      }
     }
     if (!r.ok && r.error.length() == 0) {
       String detail = r.detail.length() > 300 ? r.detail.substring(0, 300) : r.detail;
@@ -174,14 +189,24 @@ ApiResult Bambuddy::request(bool post, const String &path, String *bodyOut,
 }
 
 ApiResult Bambuddy::getPrinters(JsonDocument &doc, const String &host, const String &key) {
-  String body;
-  ApiResult r = request(false, "/printers/", &body, host, key, 10000);
-  if (!r.ok) return r;
-  DeserializationError e = deserializeJson(doc, body);
-  if (e) {
+  // Bambuddy answers with an array of printer objects carrying many fields;
+  // keep only id and the name variants of each element.
+  JsonDocument filter;
+  JsonObject f = filter.add<JsonObject>();
+  f["id"] = true;
+  f["name"] = true;
+  f["friendly_name"] = true;
+  f["display_name"] = true;
+  ApiResult r = request(false, "/printers/", nullptr, host, key, 10000, &doc, &filter);
+  if (!r.ok) {
+    if (r.status > 0 && r.status < 300)
+      r.error += tr(" Zeigt die Adresse wirklich auf Bambuddy?", " Does the address really point at Bambuddy?");
+    return r;
+  }
+  if (!doc.is<JsonArray>()) {
     r.ok = false;
-    r.error = String(tr("Antwort ist kein JSON (", "Response is not JSON (")) + e.c_str() +
-              tr("). Zeigt die Adresse wirklich auf Bambuddy?", "). Does the address really point at Bambuddy?");
+    r.error = tr("Unerwartetes Antwortformat: keine Druckerliste. Zeigt die Adresse wirklich auf Bambuddy?",
+                 "Unexpected response format: not a printer list. Does the address really point at Bambuddy?");
   }
   return r;
 }
@@ -195,24 +220,17 @@ ApiResult Bambuddy::getStatus(int printerId, PrinterStatus &out) {
   // here would only delay button presses queued behind a poll.
   if (timeout > 6000) timeout = 6000;
 
-  String body;
-  ApiResult r = request(false, "/printers/" + String(printerId) + "/status", &body, host, key, timeout);
-  if (!r.ok) return r;
-
-  // The status document is large (temperatures, AMS trays, HMS errors …).
-  // Only keep the handful of fields the button needs.
+  // The status document is large (temperatures, AMS trays, HMS errors,
+  // filament data …) — parsed straight from the socket, keeping only the
+  // handful of fields the button needs.
   JsonDocument filter;
   filter["awaiting_plate_clear"] = true;
   filter["chamber_light"] = true;
   filter["connected"] = true;
   filter["state"] = true;
   JsonDocument doc;
-  DeserializationError e = deserializeJson(doc, body, DeserializationOption::Filter(filter));
-  if (e) {
-    r.ok = false;
-    r.error = String(tr("Status ist kein JSON: ", "Status is not JSON: ")) + e.c_str();
-    return r;
-  }
+  ApiResult r = request(false, "/printers/" + String(printerId) + "/status", nullptr, host, key, timeout, &doc, &filter);
+  if (!r.ok) return r;
   out.awaitingPlateClear = doc["awaiting_plate_clear"] | false;
   out.chamberLight = doc["chamber_light"] | false;
   out.connected = doc["connected"] | false;

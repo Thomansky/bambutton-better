@@ -3,9 +3,17 @@
 #include <ESPmDNS.h>
 #include <mdns.h>
 #include <esp_netif.h>
+#include <esp_system.h>
 #include <algorithm>
 
 Net net;
+
+// "Setup network already timed out during this outage" must survive the
+// 30-minute self-reboot, otherwise the network would reappear for another
+// apTimeoutMin after every reboot. RTC memory keeps its value across
+// esp_restart() and is random after a power cut, hence the magic.
+static RTC_NOINIT_ATTR uint32_t s_apTimedOutMagic;
+static const uint32_t AP_TIMED_OUT_MAGIC = 0x4150544FUL;
 
 // ------------------------------------------------------------------ captive DNS
 
@@ -313,8 +321,9 @@ void Net::closeAp() {
 }
 
 bool Net::openPortal(uint32_t holdMs) {
-  _apTimedOut = false;  // explicitly asked for: the timeout starts afresh
+  _apTimedOut = false;  // explicitly asked for: clear the lockout …
   openAp();
+  _apOpenedAt = millis();  // … and restart the auto-off countdown, even if the AP was already up
   uint32_t until = millis() + holdMs;
   if (until == 0) until = 1;
   _apHoldUntil = until;
@@ -444,8 +453,15 @@ bool Net::startTest(const String &ssid, const String &pass, uint32_t seq) {
   _evGotIp = false;  // a GOT_IP still pending for the old network is not this test's result
   _evLink = false;
   _restoreAfterTest = settings.hasWifi();
-  // Keep (or open) the setup network so the phone can watch the result.
-  if (!_apUp) openPortal(AP_GRACE_MS);
+  // Keep (or open) the setup network so the phone can watch the result: hold
+  // it at least AP_GRACE_MS from now, never shortening a longer hold.
+  if (!_apUp) {
+    openPortal(AP_GRACE_MS);
+  } else {
+    uint32_t until = millis() + AP_GRACE_MS;
+    if (until == 0) until = 1;
+    if (!_apHoldUntil || (int32_t)(until - _apHoldUntil) > 0) _apHoldUntil = until;
+  }
   // Already on exactly this network with this password: nothing to try.
   // (WiFi.begin() with an unchanged config returns without reconnecting,
   // which would otherwise look like a 12 s stall.)
@@ -565,6 +581,7 @@ void Net::supervise(uint32_t now, bool up) {
   if (down > REBOOT_DOWN_MS && apClients() == 0) {
     Serial.println("[wifi] 30 min ohne Verbindung und niemand im Setup-Netz -> Neustart");
     Serial.flush();
+    s_apTimedOutMagic = _apTimedOut ? AP_TIMED_OUT_MAGIC : 0;
     delay(100);
     ESP.restart();
   }
@@ -614,9 +631,14 @@ void Net::begin(bool forcePortal) {
   WiFi.setAutoReconnect(true);
 
   _staWanted = settings.hasWifi();
+  // Timed out before the self-reboot? Then stay quiet; only an explicit open
+  // (button A now, a 5 s press later, UI, USB) brings the setup network back.
+  _apTimedOut = (esp_reset_reason() == ESP_RST_SW && s_apTimedOutMagic == AP_TIMED_OUT_MAGIC);
+  s_apTimedOutMagic = 0;
+  if (_apTimedOut) Serial.println("[wifi] Setup-Netz war vor dem Neustart abgelaufen -> bleibt zu");
   // Open the setup network first so the mode is settled before the station
   // starts connecting (a mode change mid-association can abort the attempt).
-  if (forcePortal || !_staWanted) openPortal(forcePortal ? 300000 : 0);
+  if (forcePortal || (!_staWanted && !_apTimedOut)) openPortal(forcePortal ? 300000 : 0);
   if (_staWanted) kickSta(settings.wifiSsid, settings.wifiPass);
   else startScan();  // have the list ready when the phone arrives
 }

@@ -72,7 +72,7 @@ The API key is created in Bambuddy under *Settings → API Keys* and needs the p
 
 ### When the setup network appears and when it disappears
 
-- It is open as long as **no Wi-Fi is stored**.
+- It is open **after boot when no Wi-Fi is stored** (until the auto-off below).
 - It appears **automatically** when the stored Wi-Fi is not reachable 30 s after boot,
   or later drops out for more than a minute. The board keeps trying to reach the home
   network in parallel (power cut: the router eventually comes back and the board

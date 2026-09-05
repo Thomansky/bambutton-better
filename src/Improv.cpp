@@ -60,9 +60,7 @@ std::vector<String> ImprovSerial::deviceUrls() {
 // ------------------------------------------------------------------ incoming
 
 void ImprovSerial::feed(uint8_t b) {
-  uint32_t now = millis();
-  if (_pos && now - _lastByte > 1000) _pos = 0;  // long pause: resynchronise
-  _lastByte = now;
+  _lastByte = millis();  // resync on pauses happens in loop(), only while the queue is empty
 
   if (_pos < 6) {
     // Hunting for the header inside whatever else arrives on the port.
@@ -119,12 +117,22 @@ void ImprovSerial::handleRpc(const uint8_t *data, uint8_t len) {
       uint8_t pl = p[1 + sl];
       if (2 + sl + pl > plen) { sendError(ERR_INVALID_RPC); return; }
       String pass((const char *)p + 2 + sl, pl);
-      _seq = 3000000000UL + (++_n);
       Serial.printf("[improv] WLAN-Zugangsdaten fuer '%s' erhalten\n", ssid.c_str());
-      if (!net.startTest(ssid, pass, _seq)) {
-        sendError(ERR_UNKNOWN);  // another attempt is running
+      // Same limits as the web portal; the core would reject these silently
+      // and the host would wait for the full test timeout.
+      if (sl == 0 || sl > 32 || (pl > 0 && pl < 8) || pl > 63) {
+        Serial.printf("[improv] Zugangsdaten abgelehnt (SSID %u Zeichen, Passwort %u Zeichen)\n", sl, pl);
+        sendError(ERR_CONNECT);
+        sendState(STATE_READY);
         return;
       }
+      uint32_t seq = 3000000000UL + (_n + 1);  // above the page's Date.now()%2e9 range
+      if (!net.startTest(ssid, pass, seq)) {
+        sendError(ERR_UNKNOWN);  // another attempt is running; keep tracking that one
+        return;
+      }
+      ++_n;
+      _seq = seq;
       _provisioning = true;
       sendError(ERR_NONE);
       sendState(STATE_PROVISIONING);
@@ -160,7 +168,14 @@ void ImprovSerial::handleRpc(const uint8_t *data, uint8_t len) {
 
 void ImprovSerial::loop() {
   if (!_s) return;
-  for (int i = 0; i < 64 && _s->available(); i++) feed((uint8_t)_s->read());
+  int n = _s->available();
+  if (n <= 0) {
+    // Only a genuine pause with nothing queued resynchronises the parser; a
+    // slow loop pass with the rest of a frame already waiting must not.
+    if (_pos && millis() - _lastByte > 1000) _pos = 0;
+  } else {
+    while (n-- > 0 && _s->available()) feed((uint8_t)_s->read());  // bounded by the RX queue
+  }
 
   if (_provisioning && !net.testing() && net.lastTestSeq() == _seq) {
     _provisioning = false;

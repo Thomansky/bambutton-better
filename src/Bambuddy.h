@@ -30,8 +30,12 @@ class Bambuddy {
   ApiResult clearPlate(int printerId);
 
  private:
+  // With streamDoc/filter set, a 2xx body is parsed straight from the socket
+  // (only the filtered fields are kept), so the size of the document does not
+  // matter. Without them the body is read into memory (bounded).
   ApiResult request(bool post, const String &path, String *bodyOut,
-                    const String &host, const String &key, uint32_t timeoutMs);
+                    const String &host, const String &key, uint32_t timeoutMs,
+                    JsonDocument *streamDoc = nullptr, JsonDocument *filter = nullptr);
   String resolveHost(const String &hostPort);
   String _mdnsName, _mdnsIp;
   uint32_t _mdnsAt = 0;
