@@ -1,6 +1,9 @@
 #include "Station.h"
 #include "Settings.h"
 
+static const uint32_t SHORT_PRESS_MS = 1500;  // released within this: clear plate
+static const uint32_t LONG_PRESS_MS = 5000;   // held this long: open the setup network
+
 void Station::begin(int idx, int ledPin, int buttonPin, int printerId_) {
   index = idx;
   _led = ledPin;
@@ -23,16 +26,33 @@ void Station::pollButton() {
     } else if (now - _changeStart >= 40) {  // 40 ms debounce
       _stable = raw;
       _changeStart = 0;
-      if (raw) _pending = true;  // rising edge = pressed
+      if (raw) {
+        _pressedAt = now ? now : 1;  // pressed: decide on release (or at 5 s)
+        _longFired = false;
+      } else if (_pressedAt && !_longFired && now - _pressedAt < SHORT_PRESS_MS) {
+        _pending = true;             // released quickly: a normal press
+      }
     }
   } else {
     _changeStart = 0;
+  }
+  // Still held after 5 s: fire the long press once while the finger is
+  // still on the button, so the LED can acknowledge it right away.
+  if (_stable && _pressedAt && !_longFired && now - _pressedAt >= LONG_PRESS_MS) {
+    _longFired = true;
+    _longPending = true;
   }
 }
 
 bool Station::consumePress() {
   if (!_pending) return false;
   _pending = false;
+  return true;
+}
+
+bool Station::consumeLongPress() {
+  if (!_longPending) return false;
+  _longPending = false;
   return true;
 }
 

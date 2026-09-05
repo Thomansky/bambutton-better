@@ -43,6 +43,14 @@ pio run -t upload
 
 ## Einrichten
 
+**Direkt auf der Flash-Seite (USB):** Gleich nach dem Installieren bietet die Flash-Seite
+**„Connect to Wi-Fi“** an (Improv Wi-Fi über die serielle Schnittstelle). WLAN aus der
+Liste wählen, Passwort eingeben — das Board verbindet sich und zeigt den Link zu seiner
+Oberfläche. Das geht auch später jederzeit: Board anstecken, auf der Flash-Seite
+„Verbinden“ klicken und „Connect to Wi-Fi“ wählen. Danach weiter mit Schritt 4.
+
+**Oder mit dem Handy:**
+
 1. Nach dem Flashen öffnet das Board das WLAN **`Bambutton-Setup`** (ohne Passwort;
    in der Oberfläche lässt sich später eines setzen).
 2. Handy damit verbinden. Die Einrichtungsseite öffnet sich von selbst; falls nicht,
@@ -72,9 +80,15 @@ Rechte **printers:read** und **printers:clear_plate**.
   wieder, das Board verbindet sich dann ohne Zutun).
 - Es **schließt sich von selbst**, sobald das Heimnetz steht: 90 s nach dem Verbinden,
   wenn niemand mehr im Setup-Netz ist, spätestens 5 Minuten nach dem Verbinden.
-- Es lässt sich jederzeit in der Oberfläche (Erweitert → „Setup-Netz für 10 Minuten
-  öffnen“) oder durch **Halten von Knopf A beim Einschalten** öffnen (dann bleibt es
-  unabhängig vom Heimnetz 5 Minuten offen).
+- Ohne Heimnetz **schaltet es sich nach 15 Minuten von selbst ab** (Erweitert →
+  „Setup-Netz ohne Heimnetz automatisch schließen nach“; 5 bis 60 Minuten oder nie),
+  sobald niemand mehr damit verbunden ist. Das Board versucht weiter, ins Heimnetz zu
+  kommen; das Setup-Netz kommt erst wieder, wenn jemand es öffnet.
+- Öffnen lässt es sich jederzeit durch **Halten eines Knopfes für 5 Sekunden** (die LED
+  blinkt schnell zur Bestätigung; 10 Minuten offen), in der Oberfläche (Erweitert →
+  „Setup-Netz für 10 Minuten öffnen“), durch **Halten von Knopf A beim Einschalten**
+  (5 Minuten offen, unabhängig vom Heimnetz) oder per USB über die Flash-Seite
+  („Connect to Wi-Fi“).
 - Ist ein WLAN gespeichert und kommt 30 Minuten lang keine Verbindung zustande, startet
   das Board neu, sofern niemand im Setup-Netz ist (Selbstheilung, falls sich der
   WLAN-Stack verhakt hat).
@@ -86,9 +100,12 @@ Knopf A:  LED = GPIO3,  Taster = GPIO4
 Knopf B:  LED = GPIO5,  Taster = GPIO6
 ```
 
-Taster gegen `3V3` (interner Pull-down, Auslösung bei steigender Flanke),
-LED über Vorwiderstand gegen `GND`. Keine 5 V an die GPIOs. Die Pins sind in der
-Firmware festgelegt (`src/Settings.cpp`).
+Taster gegen `3V3` (interner Pull-down), LED über Vorwiderstand gegen `GND`. Keine 5 V
+an die GPIOs. Die Pins sind in der Firmware festgelegt (`src/Settings.cpp`).
+
+Ein **kurzer Druck** (innerhalb von 1,5 s losgelassen) gibt die Platte frei. **5 Sekunden
+halten** öffnet das Setup-Netz für 10 Minuten (die LED blinkt schnell zur Bestätigung).
+Alles dazwischen bewirkt nichts.
 
 ## LED-Bedeutung
 

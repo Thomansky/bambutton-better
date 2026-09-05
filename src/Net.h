@@ -70,6 +70,10 @@ class Net {
   bool apActive() const { return _apUp; }
   bool testing() const { return _testing; }
   bool hasCredentials() const;
+  uint32_t lastTestSeq() const { return _lastTestSeq; }
+  bool lastTestOk() const { return _lastTestOk; }
+  String lastTestText() const { return _lastTestText; }
+  const std::vector<ScanEntry> &scanResults() const { return _scan; }
   NetPhase phase() const { return _phase; }
   const char *phaseName() const;
   String phaseText() const;          // for humans, in German
@@ -109,7 +113,7 @@ class Net {
 
   bool _apUp = false, _apSecured = false, _staWanted = false, _testing = false, _inProgress = false;
   bool _mdnsUp = false, _scanRunning = false, _scanDone = false, _scanFailed = false;
-  bool _restoreAfterTest = false, _testGotIp = false, _lastTestOk = false;
+  bool _restoreAfterTest = false, _testGotIp = false, _lastTestOk = false, _apTimedOut = false;
   uint32_t _bootAt = 0, _connectedAt = 0, _downSince = 0, _lastKick = 0, _lastDiscAt = 0;
   uint32_t _testStart = 0, _apOpenedAt = 0, _apHoldUntil = 0, _closeAt = 0, _scanStartedAt = 0;
   uint32_t _attempts = 0, _reconnects = 0, _testSeq = 0, _lastTestSeq = 0;

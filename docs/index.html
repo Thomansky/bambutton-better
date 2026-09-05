@@ -65,22 +65,26 @@ span[data-l]{display:none}html[lang="de"] span[data-l="de"],html[lang="en"] span
 <div class="card">
   <h2><span data-l="de">Danach einrichten</span><span data-l="en">Then set it up</span></h2>
   <div data-l="de">
+    <p><strong>Direkt hier per USB:</strong> Nach dem Flashen bietet diese Seite <strong>„Connect to Wi-Fi“</strong> an. WLAN aus der Liste wählen, Passwort eingeben, fertig — das Board verbindet sich und zeigt den Link zu seiner Oberfläche. Das geht auch später jederzeit: Board anstecken, oben auf „Verbinden“ klicken, „Connect to Wi-Fi“ wählen.</p>
+    <p><strong>Oder mit dem Handy:</strong></p>
     <ol>
       <li>Das Board öffnet das WLAN <code>Bambutton-Setup</code> (ohne Passwort).</li>
       <li>Mit dem Handy verbinden — die Einrichtungsseite öffnet sich von selbst. Falls nicht: <code>http://192.168.4.1/</code> im Browser eingeben.</li>
       <li>WLAN auswählen (nur 2,4 GHz), Passwort eingeben, <strong>„Verbinden &amp; speichern“</strong>. Das Board probiert die Verbindung sofort aus und zeigt das Ergebnis samt IP-Adresse an; bei einem Fehler steht der Grund dabei.</li>
-      <li>Handy oder PC zurück ins Heimnetz und <code>http://bambutton.local/</code> (oder die angezeigte IP) öffnen: Bambuddy-Adresse und API-Key eintragen, Drucker laden, den Knöpfen zuordnen.</li>
     </ol>
-    <p class="note">Das Setup-Netz schließt sich nach der erfolgreichen Verbindung von selbst und erscheint nur wieder, wenn das Heimnetz länger nicht erreichbar ist. Knopf A beim Einschalten gedrückt halten öffnet es jederzeit. Die Oberfläche gibt es auf Deutsch und Englisch.</p>
+    <p><strong>Danach</strong> im Heimnetz <code>http://bambutton.local/</code> (oder die angezeigte IP) öffnen: Bambuddy-Adresse und API-Key eintragen, Drucker laden, den Knöpfen zuordnen.</p>
+    <p class="note">Das Setup-Netz schließt sich nach der erfolgreichen Verbindung von selbst; ohne Heimnetz nach 15 Minuten (einstellbar). Wieder öffnen: einen Knopf 5 Sekunden halten oder Knopf A beim Einschalten gedrückt halten. Die Oberfläche gibt es auf Deutsch und Englisch.</p>
   </div>
   <div data-l="en">
+    <p><strong>Right here via USB:</strong> after flashing, this page offers <strong>“Connect to Wi-Fi”</strong>. Pick your network from the list, enter the password, done — the board connects and shows a link to its web UI. This works any time later as well: plug the board in, click “Connect” above and choose “Connect to Wi-Fi”.</p>
+    <p><strong>Or with your phone:</strong></p>
     <ol>
       <li>The board opens the Wi-Fi network <code>Bambutton-Setup</code> (no password).</li>
       <li>Connect your phone — the setup page opens by itself. If not, enter <code>http://192.168.4.1/</code> in the browser.</li>
       <li>Pick your Wi-Fi (2.4 GHz only), enter the password, <strong>“Connect &amp; save”</strong>. The board tries the connection right away and shows the result including the IP address; on failure it shows the reason.</li>
-      <li>Reconnect phone or PC to the home network and open <code>http://bambutton.local/</code> (or the IP shown): enter the Bambuddy address and API key, load printers, assign them to the buttons.</li>
     </ol>
-    <p class="note">The setup network closes by itself after a successful connection and only reappears when the home network is unreachable for a while. Holding button A while powering on opens it any time. The web UI is available in English and German.</p>
+    <p><strong>Afterwards</strong> open <code>http://bambutton.local/</code> (or the IP shown) on the home network: enter the Bambuddy address and API key, load printers, assign them to the buttons.</p>
+    <p class="note">The setup network closes by itself after a successful connection; without a home network after 15 minutes (configurable). To reopen it, hold a button for 5 seconds or hold button A while powering on. The web UI is available in English and German.</p>
   </div>
 </div>
 

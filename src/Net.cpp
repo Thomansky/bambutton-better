@@ -228,6 +228,7 @@ void Net::handleGotIp(uint32_t now) {
   if (_connectedAt != 0 && wasDown) _reconnects++;
   _connectedAt = now ? now : 1;
   _downSince = 0;
+  _apTimedOut = false;  // a future outage may open the fallback AP again
   _phase = NetPhase::Connected;
   _failText = "";
   // Only an IP obtained after this test's own kick counts (a DHCP renewal of
@@ -312,6 +313,7 @@ void Net::closeAp() {
 }
 
 bool Net::openPortal(uint32_t holdMs) {
+  _apTimedOut = false;  // explicitly asked for: the timeout starts afresh
   openAp();
   uint32_t until = millis() + holdMs;
   if (until == 0) until = 1;
@@ -550,7 +552,9 @@ void Net::supervise(uint32_t now, bool up) {
     if (now - lastActivity > KICK_STA_MS) kickSta(settings.wifiSsid, settings.wifiPass);
   }
 
-  if (!_apUp) {
+  // Fallback AP — but not again after it already timed out during this
+  // outage; the user asked for it to stay off until someone opens it.
+  if (!_apUp && !_apTimedOut) {
     bool neverConnected = _connectedAt == 0;
     if (down > (neverConnected ? BOOT_FALLBACK_MS : DOWN_FALLBACK_MS)) {
       Serial.printf("[wifi] Seit %lu s keine Verbindung -> Setup-Netz als Fallback\n", (unsigned long)(down / 1000));
@@ -575,10 +579,25 @@ void Net::apHousekeeping(uint32_t now, bool up) {
   }
   if (_testing) return;
   if (_apHoldUntil && (int32_t)(_apHoldUntil - now) > 0) return;
-  if (!up) return;  // never take the setup network away while the station is down
-  uint32_t sinceUp = now - _connectedAt;
-  if (sinceUp < AP_GRACE_MS) return;
-  if (apClients() == 0 || sinceUp > AP_MAX_AFTER_UP_MS) closeAp();
+  if (up) {
+    uint32_t sinceUp = now - _connectedAt;
+    if (sinceUp < AP_GRACE_MS) return;
+    if (apClients() == 0 || sinceUp > AP_MAX_AFTER_UP_MS) closeAp();
+    return;
+  }
+  // Station down: the setup network still goes away after the configured
+  // time so an unattended board does not broadcast it for ever. A 5 s press
+  // on a button, button A at boot, the web UI or the flash page (USB) bring
+  // it back; the station keeps retrying regardless.
+  if (settings.apTimeoutMin == 0) return;
+  uint32_t age = now - _apOpenedAt;
+  uint32_t limit = (uint32_t)settings.apTimeoutMin * 60000UL;
+  if (age < limit) return;
+  if (apClients() == 0 || age > limit + AP_MAX_AFTER_UP_MS) {
+    Serial.printf("[wifi] Setup-Netz nach %u min ohne Heimnetz geschlossen\n", (unsigned)settings.apTimeoutMin);
+    _apTimedOut = true;
+    closeAp();
+  }
 }
 
 // ------------------------------------------------------------------ lifecycle
@@ -646,6 +665,8 @@ void Net::fillStatus(JsonObject o) {
   o["apIp"] = _apUp ? WiFi.softAPIP().toString() : "";
   o["apClients"] = apClients();
   o["apOpen"] = !_apSecured;
+  o["apTimedOut"] = _apTimedOut;
+  o["apTimeoutMin"] = settings.apTimeoutMin;
   o["hasWifi"] = settings.hasWifi();
   o["testing"] = _testing;
   o["testSeq"] = _testing ? _testSeq : _lastTestSeq;

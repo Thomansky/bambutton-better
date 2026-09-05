@@ -43,6 +43,14 @@ pio run -t upload
 
 ## Setup
 
+**Directly on the flash page (USB):** right after installing, the flash page offers
+**"Connect to Wi-Fi"** (Improv Wi-Fi over the serial port). Pick your network from the list,
+enter the password, and the board connects and shows a link to its web UI. This also works
+any time later: plug the board in, click "Connect" on the flash page and choose "Connect to
+Wi-Fi". Then continue with step 4 below.
+
+**Or with your phone:**
+
 1. After flashing, the board opens the Wi-Fi network **`Bambutton-Setup`** (no password;
    one can be set later in the UI).
 2. Connect your phone to it. The setup page opens by itself; if it does not, enter
@@ -71,9 +79,14 @@ The API key is created in Bambuddy under *Settings → API Keys* and needs the p
   connects without any action).
 - It **closes by itself** once the home network is up: 90 s after connecting when nobody
   is on the setup network any more, 5 minutes after connecting at the latest.
-- It can be opened any time in the UI (Advanced → "Open setup network for 10 minutes")
-  or by **holding button A while powering on** (then it stays open for 5 minutes
-  regardless of the home network).
+- Without a home network it **switches off by itself after 15 minutes** (Advanced →
+  "Close the setup network automatically after"; 5 to 60 minutes or never), as soon as
+  nobody is connected to it. The board keeps trying to reach the home network; the setup
+  network only comes back when someone opens it.
+- It can be opened any time by **holding any button for 5 seconds** (the LED blinks fast
+  to confirm; open for 10 minutes), in the UI (Advanced → "Open setup network for 10
+  minutes"), by **holding button A while powering on** (open for 5 minutes regardless of
+  the home network), or over USB from the flash page ("Connect to Wi-Fi").
 - If a Wi-Fi is stored and no connection comes up for 30 minutes, the board restarts,
   provided nobody is on the setup network (self-healing in case the Wi-Fi stack got
   stuck).
@@ -85,9 +98,12 @@ Button A:  LED = GPIO3,  switch = GPIO4
 Button B:  LED = GPIO5,  switch = GPIO6
 ```
 
-Switch to `3V3` (internal pull-down, triggers on the rising edge), LED through a
-series resistor to `GND`. No 5 V on the GPIOs. The pins are fixed in the firmware
-(`src/Settings.cpp`).
+Switch to `3V3` (internal pull-down), LED through a series resistor to `GND`. No 5 V on
+the GPIOs. The pins are fixed in the firmware (`src/Settings.cpp`).
+
+A **short press** (released within 1.5 s) clears the plate. **Holding for 5 s** opens the
+setup network for 10 minutes (the LED blinks fast to confirm). Anything in between does
+nothing.
 
 ## LED meaning
 

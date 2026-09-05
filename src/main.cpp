@@ -24,9 +24,8 @@
 #include "Net.h"
 #include "Bambuddy.h"
 #include "Station.h"
+#include "Improv.h"
 #include "page.h"
-
-#define FW_VERSION "2.0.0"
 
 WebServer server(80);
 Station stations[STATION_COUNT];
@@ -630,6 +629,10 @@ static void handleSave() {
     int l = in["lang"] | 0;
     settings.lang = (l == LANG_EN) ? LANG_EN : LANG_DE;
   }
+  if (!in["apTimeout"].isNull()) {
+    int m = in["apTimeout"] | 15;
+    settings.apTimeoutMin = (m < 0) ? 0 : (m > 120 ? 120 : (uint8_t)m);
+  }
   if (tx >= 0) settings.txPower = (int8_t)tx;
   if (!in["apPass"].isNull()) settings.apPass = ap;
   settings.save();
@@ -804,6 +807,7 @@ void setup() {
 
   setupRoutes();
   server.begin();
+  improv.begin(Serial);  // Wi-Fi provisioning over USB from the flash page
 
   hbLoop = hbWorker = millis();
   // 12 KB: the 8 KB original was tight once Bambuddy responses got parsed.
@@ -814,6 +818,7 @@ void setup() {
 void loop() {
   server.handleClient();
   net.loop();
+  improv.loop();
 
   uint32_t now = millis();
   hbLoop = now;
@@ -833,6 +838,13 @@ void loop() {
   for (int i = 0; i < STATION_COUNT; i++) {
     stations[i].pollButton();
     if (stations[i].consumePress()) pressAt[i] = now ? now : 1;
+    if (stations[i].consumeLongPress()) {
+      // Held for 5 s: open the setup network for 10 minutes and acknowledge
+      // with the identify blink.
+      Serial.printf("Knopf %s lange gedrueckt -> Setup-Netz\n", stationName(i));
+      net.openPortal(10UL * 60UL * 1000UL);
+      stations[i].identify(3000);
+    }
     stations[i].updateLed(now);
   }
 

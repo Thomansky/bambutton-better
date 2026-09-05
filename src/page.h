@@ -115,6 +115,9 @@ details>summary::before{content:"▸ "}details[open]>summary::before{content:"�
     <small data-t="hintTx">Die Antenne des Super Mini verträgt keine volle Leistung: mit 19,5 dBm bricht die Verbindung oft ab oder kommt gar nicht zustande. Erst bei sehr großer Entfernung schrittweise erhöhen.</small>
     <label data-t="lApPass">Passwort für das Setup-Netz „Bambutton-Setup“</label>
     <input id="apPass" type="password" data-p="pApPass" placeholder="leer = offenes Setup-Netz (8–63 Zeichen)">
+    <label data-t="lApTimeout">Setup-Netz ohne Heimnetz automatisch schließen nach</label>
+    <select id="apTimeout"><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option><option value="0" data-t="optNever">nie</option></select>
+    <small data-t="hintApTimeout">Gilt, wenn das Heimnetz nicht erreichbar ist. Wieder öffnen: einen Knopf 5 Sekunden halten, Knopf A beim Einschalten, hier per Schaltfläche oder per USB über die Flash-Seite. Bei bestehender Heimnetz-Verbindung schließt es ohnehin nach 90 s.</small>
     <button onclick="saveAll('m5')" data-t="bSaveSettings">Einstellungen speichern</button>
     <button class="sec" onclick="portal()" data-t="bPortal">Setup-Netz für 10 Minuten öffnen</button>
     <div id="m5" class="msg"></div>
@@ -145,7 +148,10 @@ hintTest:'Der Test löst denselben Aufruf aus wie ein Tastendruck und zeigt Bamb
 s5:'5 · Erweitert & Firmware',lTx:'WLAN-Sendeleistung',optTx34:'8,5 dBm – empfohlen für ESP32-C3 Super Mini',optTx78:'19,5 dBm – Maximum',
 hintTx:'Die Antenne des Super Mini verträgt keine volle Leistung: mit 19,5 dBm bricht die Verbindung oft ab oder kommt gar nicht zustande. Erst bei sehr großer Entfernung schrittweise erhöhen.',
 lApPass:'Passwort für das Setup-Netz „Bambutton-Setup“',pApPass:'leer = offenes Setup-Netz (8–63 Zeichen)',pApPassSet:'Passwort gesetzt – zum Ändern eintragen, leeren = offen',
-bSaveSettings:'Einstellungen speichern',bPortal:'Setup-Netz für 10 Minuten öffnen',lFw:'Neue firmware.bin',bOta:'Hochladen & neu starten',bReboot:'Nur neu starten',
+bSaveSettings:'Einstellungen speichern',bPortal:'Setup-Netz für 10 Minuten öffnen',
+lApTimeout:'Setup-Netz ohne Heimnetz automatisch schließen nach',optNever:'nie',
+hintApTimeout:'Gilt, wenn das Heimnetz nicht erreichbar ist. Wieder öffnen: einen Knopf 5 Sekunden halten, Knopf A beim Einschalten, hier per Schaltfläche oder per USB über die Flash-Seite. Bei bestehender Heimnetz-Verbindung schließt es ohnehin nach 90 s.',
+r_apTimedOut:'geschlossen (Zeit abgelaufen) – Knopf 5 s halten zum Öffnen',lFw:'Neue firmware.bin',bOta:'Hochladen & neu starten',bReboot:'Nur neu starten',
 m_scan:'Suche Netzwerke …',m_scanFail:'Suche fehlgeschlagen – bitte noch einmal auf ↻ tippen.',m_scanOk:'%1 Netzwerke gefunden (nur 2,4 GHz sichtbar).',
 m_scanTesting:'Während eines Verbindungsversuchs wird nicht gesucht.',m_noBoard:'Keine Antwort vom Board.',m_pickSsid:'Bitte ein WLAN auswählen oder eintragen.',
 m_connecting:'Verbinde mit „%1“ …',m_wait:'Warte auf das Board … (die Verbindung zum Setup-Netz kann kurz aussetzen, bitte warten)',
@@ -185,7 +191,10 @@ hintTest:'The test fires the same call as a real button press and shows Bambuddy
 s5:'5 · Advanced & firmware',lTx:'Wi-Fi transmit power',optTx34:'8.5 dBm – recommended for ESP32-C3 Super Mini',optTx78:'19.5 dBm – maximum',
 hintTx:'The Super Mini’s antenna cannot handle full power: at 19.5 dBm the connection often drops or never comes up. Only raise it step by step for very long distances.',
 lApPass:'Password for the setup network “Bambutton-Setup”',pApPass:'empty = open setup network (8–63 characters)',pApPassSet:'Password set – enter to change, clear = open',
-bSaveSettings:'Save settings',bPortal:'Open setup network for 10 minutes',lFw:'New firmware.bin',bOta:'Upload & restart',bReboot:'Restart only',
+bSaveSettings:'Save settings',bPortal:'Open setup network for 10 minutes',
+lApTimeout:'Close the setup network automatically after (without home network)',optNever:'never',
+hintApTimeout:'Applies while the home network is unreachable. To reopen: hold a button for 5 seconds, hold button A while powering on, use the button here, or use USB via the flash page. With the home network connected it closes after 90 s anyway.',
+r_apTimedOut:'closed (timed out) – hold a button 5 s to reopen',lFw:'New firmware.bin',bOta:'Upload & restart',bReboot:'Restart only',
 m_scan:'Scanning for networks …',m_scanFail:'Scan failed – please tap ↻ again.',m_scanOk:'%1 networks found (only 2.4 GHz visible).',
 m_scanTesting:'No scanning while a connection attempt is running.',m_noBoard:'No answer from the board.',m_pickSsid:'Please choose or enter a network.',
 m_connecting:'Connecting to “%1” …',m_wait:'Waiting for the board … (the setup network may drop for a moment, please wait)',
@@ -228,7 +237,7 @@ function fmtS(s){s=Math.round(s);if(s<90)return s+' s';var m=Math.round(s/60);if
 function q(r){return r>=-55?(L==='de'?'sehr gut':'excellent'):r>=-67?(L==='de'?'gut':'good'):r>=-75?(L==='de'?'mittel':'fair'):r>=-85?(L==='de'?'schwach':'weak'):(L==='de'?'sehr schwach':'very weak')}
 function prog(t){var p=$('prog');p.textContent=t;p.className='prog'+(t?' on':'')}
 var dirty={},S=null,init=false,fails=0,armed={},doneShown=0,lastScan=null;
-['host','key','apiOn','p0','p1','pollMs','idleLed','txPower','apPass','hostname','ssid','ssidm','pw'].forEach(function(i){
+['host','key','apiOn','p0','p1','pollMs','idleLed','txPower','apPass','apTimeout','hostname','ssid','ssidm','pw'].forEach(function(i){
   ['input','change'].forEach(function(ev){$(i).addEventListener(ev,function(){dirty[i]=1})})});
 function setIf(id,v){if(dirty[id]||document.activeElement===$(id))return;var e=$(id);if(e.type==='checkbox')e.checked=!!v;else e.value=v}
 function arm(key,text,fn){if(armed[key]&&Date.now()-armed[key]<8000){armed[key]=0;fn();return}armed[key]=Date.now();msg('m1','warn',T('m_arm',text))}
@@ -333,10 +342,10 @@ function saveAll(m){
   msg(m,'',T('m_saving'));
   var b={key:$('key').value,apiEnabled:$('apiOn').checked,
          p0:parseInt($('p0').value||'0'),p1:parseInt($('p1').value||'0'),pollMs:parseInt($('pollMs').value),
-         idleLed:parseInt($('idleLed').value),txPower:parseInt($('txPower').value)};
+         idleLed:parseInt($('idleLed').value),txPower:parseInt($('txPower').value),apTimeout:parseInt($('apTimeout').value)};
   if(dirty.host)b.host=$('host').value.trim();
   if(dirty.apPass)b.apPass=$('apPass').value;
-  P('/api/save',b).then(function(d){if(d.ok){msg(m,'ok',T('m_saved'));['host','key','apiOn','p0','p1','pollMs','idleLed','txPower','apPass'].forEach(function(k){delete dirty[k]});refresh()}else msg(m,'err',d.error||'?')})
+  P('/api/save',b).then(function(d){if(d.ok){msg(m,'ok',T('m_saved'));['host','key','apiOn','p0','p1','pollMs','idleLed','txPower','apPass','apTimeout'].forEach(function(k){delete dirty[k]});refresh()}else msg(m,'err',d.error||'?')})
    .catch(function(){msg(m,'err',T('m_saveErr'))});
 }
 function ident(i){fetch('/api/identify?i='+i,{method:'POST'}).catch(function(){})}
@@ -371,7 +380,7 @@ function render(d){
   else $('lead').textContent=T('lead_setup');
   h+=row(T('r_conn'),n.sta?dot('g')+T('r_connWith',esc(n.ssid)):(n.testing?dot('y')+esc(n.phaseText)+' …':dot('r')+(n.hasWifi?T('r_down',esc(n.ssid),esc(n.phaseText)):T('r_noWifi'))));
   if(n.sta){h+=row(T('r_ip'),esc(n.ip)+T('r_ch',n.channel));h+=row(T('r_sig'),esc(n.rssiText)+' ('+n.rssi+' dBm)');h+=row(T('r_name'),'http://'+esc(n.hostname)+'.local');h+=row(T('r_since'),fmtS(n.upSec)+(n.reconnects?T('r_reconn',n.reconnects):''))}
-  h+=row(T('r_ap'),n.ap?dot('y')+T('r_apOpen',esc(n.apSsid),n.apClients,T(n.apClients==1?'dev1':'devN'),n.apOpen?T('noPw'):'WPA2'):T('r_apClosed'));
+  h+=row(T('r_ap'),n.ap?dot('y')+T('r_apOpen',esc(n.apSsid),n.apClients,T(n.apClients==1?'dev1':'devN'),n.apOpen?T('noPw'):'WPA2'):(n.apTimedOut?T('r_apTimedOut'):T('r_apClosed')));
   $('wifiTab').innerHTML=h;
   var w='';
   if(n.reason)w=T('w_last',n.reason);
@@ -382,7 +391,7 @@ function render(d){
   // Phone came back after the setup sheet closed during the channel hop: show the result.
   if(n.ap&&n.sta&&!n.testing&&n.testDone&&n.testOk&&n.testSeq&&n.testSeq!==doneShown&&location.hostname===n.apIp&&$('done').classList.contains('hide'))showDone(n);
   setIf('host',d.host||'');setIf('apiOn',d.apiEnabled!==false);setIf('pollMs',String(d.pollMs));
-  setIf('idleLed',String(d.idleLed));setIf('txPower',String(n.txPower));setIf('hostname',n.hostname||'');
+  setIf('idleLed',String(d.idleLed));setIf('txPower',String(n.txPower));setIf('apTimeout',String(n.apTimeoutMin));setIf('hostname',n.hostname||'');
   if(!dirty.key)$('key').placeholder=T(d.hasKey?'pKeySet':'pKey');
   if(!dirty.apPass)$('apPass').placeholder=T(d.apPassSet?'pApPassSet':'pApPass');
   if(!dirty.ssid&&n.ssid&&$('ssid').value===''&&$('ssid').options.length<=2){var o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid;$('ssid').insertBefore(o,$('ssid').children[1]);$('ssid').value=n.ssid}

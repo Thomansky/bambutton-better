@@ -2,6 +2,7 @@
 #include <Arduino.h>
 
 #define STATION_COUNT 2
+#define FW_VERSION "2.1.0"
 
 struct StationCfg {
   int printerId = 0;  // 0 = no printer assigned
@@ -36,6 +37,11 @@ class Settings {
   int8_t txPower = 34;
   uint8_t idleLed = IDLE_FOLLOW_LIGHT;
   uint8_t lang = LANG_DE;
+  // The setup network closes by itself after this many minutes without a
+  // client, even when the home network is unreachable (0 = never). A 5 s
+  // press on any button, button A at boot, the web UI or the flash page
+  // (USB) open it again.
+  uint8_t apTimeoutMin = 15;
 
   void load();
   void save();
