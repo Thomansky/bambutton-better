@@ -44,19 +44,23 @@ static String detailFrom(const String &body) {
 // HTTPClient::getString() loops for as long as the socket looks connected, so
 // a peer that vanished mid-response (half-open TCP) would hang the worker
 // until the watchdog reboots the board. Read with a deadline instead.
-static String readBody(HTTPClient &http, WiFiClient &client, uint32_t timeoutMs) {
+static String readBody(HTTPClient &http, WiFiClient &client, uint32_t timeoutMs, bool &truncated) {
+  truncated = false;
+  // We ask for HTTP/1.0, so chunked framing should not occur; if a server
+  // sends it anyway, fall back to the core's decoder.
   if (http.header("Transfer-Encoding").equalsIgnoreCase("chunked")) return http.getString();
   int len = http.getSize();  // -1 = unknown (read until the server closes)
   String out;
   if (len > 0) out.reserve((size_t)len < BODY_CAP ? len : BODY_CAP);
   uint32_t deadline = millis() + timeoutMs;
-  uint8_t buf[256];
+  uint8_t buf[257];  // one spare byte: String::concat copies length+1
   while ((len < 0 || (int)out.length() < len) && out.length() < BODY_CAP) {
     if ((int32_t)(deadline - millis()) <= 0) break;
     int avail = client.available();
     if (avail > 0) {
-      int n = client.read(buf, avail > (int)sizeof(buf) ? sizeof(buf) : avail);
+      int n = client.read(buf, avail > 256 ? 256 : avail);
       if (n > 0) {
+        buf[n] = 0;
         out.concat((const char *)buf, n);
         continue;
       }
@@ -64,6 +68,8 @@ static String readBody(HTTPClient &http, WiFiClient &client, uint32_t timeoutMs)
     if (!client.connected()) break;
     delay(5);
   }
+  if (out.length() >= BODY_CAP && (len < 0 ? (client.connected() || client.available() > 0) : (int)out.length() < len))
+    truncated = true;
   return out;
 }
 
@@ -91,6 +97,7 @@ ApiResult Bambuddy::request(bool post, const String &path, String *bodyOut,
   http.setConnectTimeout(5000);
   http.setTimeout(timeoutMs);
   http.setReuse(false);
+  http.useHTTP10(true);  // no chunked responses: the body is Content-Length or close-delimited
   http.setUserAgent("Bambutton/2.0");
   // Our paths match Bambuddy's routes exactly; this only covers a GET being
   // redirected by FastAPI's trailing-slash handling after a route change.
@@ -99,7 +106,7 @@ ApiResult Bambuddy::request(bool post, const String &path, String *bodyOut,
   http.collectHeaders(keep, 1);
 
   if (!http.begin(client, url)) {
-    r.error = String(tr("Ungueltige Adresse: ", "Invalid address: ")) + url;
+    r.error = String(tr("Ungültige Adresse: ", "Invalid address: ")) + url;
     r.ms = millis() - t0;
     return r;
   }
@@ -113,25 +120,32 @@ ApiResult Bambuddy::request(bool post, const String &path, String *bodyOut,
   r.status = code;
 
   if (code > 0) {
-    String b = readBody(http, client, timeoutMs);
+    bool truncated = false;
+    String b = readBody(http, client, timeoutMs, truncated);
+    r.ok = (code >= 200 && code < 300);
+    if (!r.ok) r.detail = detailFrom(b);  // from the complete body, before the excerpt is cut
     r.body = b.length() > 300 ? b.substring(0, 300) : b;
     if (bodyOut) *bodyOut = std::move(b);
-    r.ok = (code >= 200 && code < 300);
-    if (!r.ok) {
-      String detail = detailFrom(r.body);
+    if (r.ok && truncated) {
+      r.ok = false;
+      r.error = String(tr("Antwort größer als ", "Response larger than ")) + String(BODY_CAP / 1024) +
+                tr(" KB — abgeschnitten", " KB — truncated");
+    }
+    if (!r.ok && r.error.length() == 0) {
+      String detail = r.detail.length() > 300 ? r.detail.substring(0, 300) : r.detail;
       switch (code) {
         case 401:
         case 403:
           r.error = String(tr("API-Key abgelehnt (HTTP ", "API key rejected (HTTP ")) + String(code) +
-                    tr("). Key pruefen; er braucht die Rechte printers:read und printers:clear_plate.",
+                    tr("). Key prüfen; er braucht die Rechte printers:read und printers:clear_plate.",
                        "). Check the key; it needs the permissions printers:read and printers:clear_plate.");
           break;
         case 404:
-          r.error = String(tr("Nicht gefunden (HTTP 404): Adresse oder Drucker-ID pruefen. ",
+          r.error = String(tr("Nicht gefunden (HTTP 404): Adresse oder Drucker-ID prüfen. ",
                               "Not found (HTTP 404): check the address or printer ID. ")) + detail;
           break;
         case 429:
-          r.error = tr("Bambuddy drosselt die Anfragen (HTTP 429): Abfrageintervall erhoehen.",
+          r.error = tr("Bambuddy drosselt die Anfragen (HTTP 429): Abfrageintervall erhöhen.",
                        "Bambuddy is rate limiting (HTTP 429): increase the poll interval.");
           break;
         default:
@@ -145,10 +159,10 @@ ApiResult Bambuddy::request(bool post, const String &path, String *bodyOut,
     String why = HTTPClient::errorToString(code);
     if (code == HTTPC_ERROR_CONNECTION_REFUSED)
       r.error = String(tr("Keine Verbindung zu ", "Cannot reach ")) + hostPort +
-                tr(" (abgelehnt oder nicht erreichbar): Adresse, Port und Firewall pruefen",
+                tr(" (abgelehnt oder nicht erreichbar): Adresse, Port und Firewall prüfen",
                    " (refused or unreachable): check address, port and firewall");
     else if (code == HTTPC_ERROR_READ_TIMEOUT)
-      r.error = String(tr("Zeitueberschreitung: ", "Timeout: ")) + hostPort +
+      r.error = String(tr("Zeitüberschreitung: ", "Timeout: ")) + hostPort +
                 tr(" antwortet nicht innerhalb von ", " did not answer within ") + String(timeoutMs / 1000) + " s";
     else
       r.error = String(tr("Verbindungsfehler zu ", "Connection error to ")) + hostPort + ": " + why;
@@ -220,7 +234,7 @@ ApiResult Bambuddy::clearPlate(int printerId) {
     // not a connection problem; the printer simply has nothing to clear.
     r.notAwaiting = true;
     r.error = String(tr("Drucker wartet gerade nicht auf eine Plattenfreigabe (",
-                        "Printer is not waiting for a plate clear right now (")) + detailFrom(r.body) + ")";
+                        "Printer is not waiting for a plate clear right now (")) + r.detail + ")";
   }
   return r;
 }

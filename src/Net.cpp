@@ -176,13 +176,13 @@ String Net::phaseText() const {
 String Net::reasonText(uint8_t reason) const {
   switch (reason) {
     case WIFI_REASON_NO_AP_FOUND:
-      return tr("Netzwerk nicht gefunden. Der ESP32-C3 kann nur 2,4-GHz-Netze; Namen pruefen und naeher an den Router gehen.",
+      return tr("Netzwerk nicht gefunden. Der ESP32-C3 kann nur 2,4-GHz-Netze; Namen prüfen und näher an den Router gehen.",
                 "Network not found. The ESP32-C3 only supports 2.4 GHz; check the name and move closer to the router.");
     case WIFI_REASON_AUTH_FAIL:
     case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
     case WIFI_REASON_HANDSHAKE_TIMEOUT:
     case WIFI_REASON_802_1X_AUTH_FAILED:
-      return tr("Passwort abgelehnt. Bitte pruefen (Gross-/Kleinschreibung). Reine WPA3-Netze werden nicht unterstuetzt.",
+      return tr("Passwort abgelehnt. Bitte prüfen (Groß-/Kleinschreibung). Reine WPA3-Netze werden nicht unterstützt.",
                 "Password rejected. Please check it (case matters). WPA3-only networks are not supported.");
     case WIFI_REASON_AUTH_EXPIRE:
       return tr("Anmeldung am Router abgelaufen. Meist falsches Passwort oder zu schwacher Empfang.",
@@ -192,10 +192,10 @@ String Net::reasonText(uint8_t reason) const {
     case WIFI_REASON_ASSOC_TOOMANY:
     case WIFI_REASON_CONNECTION_FAIL:
     case WIFI_REASON_BEACON_TIMEOUT:
-      return tr("Der Router hat die Verbindung abgebrochen. Meist zu schwacher Empfang: naeher an den Router, andere Sendeleistung probieren.",
+      return tr("Der Router hat die Verbindung abgebrochen. Meist zu schwacher Empfang: näher an den Router, andere Sendeleistung probieren.",
                 "The router dropped the connection. Usually a weak signal: move closer, try another transmit power.");
     case 0:
-      return tr("Keine Antwort vom Router (Zeitueberschreitung).", "No answer from the router (timeout).");
+      return tr("Keine Antwort vom Router (Zeitüberschreitung).", "No answer from the router (timeout).");
     default: {
       String s = String(tr("Fehler ", "Error ")) + String(reason);
       const char *n = WiFi.disconnectReasonName((wifi_err_reason_t)reason);
@@ -230,7 +230,9 @@ void Net::handleGotIp(uint32_t now) {
   _downSince = 0;
   _phase = NetPhase::Connected;
   _failText = "";
-  if (_testing) _testGotIp = true;
+  // Only an IP obtained after this test's own kick counts (a DHCP renewal of
+  // the old network while the kick is still deferred behind a scan does not).
+  if (_testing && _lastKick != 0) _testGotIp = true;
   applyTxPower();
   startMdns();
   Serial.printf("[wifi] Verbunden: %s  IP %s  Kanal %d  RSSI %d dBm (%s)  Hostname %s\n",
@@ -291,6 +293,7 @@ void Net::openAp() {
   _dns.begin(WiFi.softAPIP());
   applyTxPower();
   _apUp = true;
+  _closeAt = 0;  // a pending close never outlives the AP it targeted
   _apOpenedAt = millis();
   Serial.printf("[wifi] Setup-Netz '%s' %s -> http://%s/\n", AP_SSID, pw ? "(WPA2)" : "(offen)",
                 WiFi.softAPIP().toString().c_str());
@@ -324,6 +327,7 @@ bool Net::closePortal() {
 }
 
 void Net::closePortalSoon(uint32_t inMs) {
+  if (!_apUp) return;  // nothing to close; a stale timestamp would kill the next AP at once
   uint32_t t = millis() + inMs;
   _closeAt = t ? t : 1;
 }
@@ -440,6 +444,14 @@ bool Net::startTest(const String &ssid, const String &pass, uint32_t seq) {
   _restoreAfterTest = settings.hasWifi();
   // Keep (or open) the setup network so the phone can watch the result.
   if (!_apUp) openPortal(AP_GRACE_MS);
+  // Already on exactly this network with this password: nothing to try.
+  // (WiFi.begin() with an unchanged config returns without reconnecting,
+  // which would otherwise look like a 12 s stall.)
+  if (staConnected() && WiFi.SSID() == ssid && pass == settings.wifiPass) {
+    _lastKick = millis() ? millis() : 1;
+    _testGotIp = true;
+    return true;
+  }
   if (_scanRunning) {
     // begin() would fail while the driver scans; testLoop() kicks as soon as
     // the scan is over.
@@ -457,6 +469,7 @@ void Net::finishTest(uint32_t now, bool ok, const String &why) {
   _lastTestSeq = _testSeq;
   _lastTestOk = ok;
   _lastTestSsid = _testSsid;
+  _lastTestText = ok ? String("") : why;  // survives the reconnect to the stored network
   if (ok) {
     settings.lock();
     settings.wifiSsid = _testSsid;
@@ -496,7 +509,7 @@ void Net::testLoop(uint32_t now, bool up) {
   }
   if (_evLink && _phase == NetPhase::Connecting) _phase = NetPhase::GotLink;
   if (_phase == NetPhase::GotLink && now - _lastKick > TEST_DHCP_MS) {
-    finishTest(now, false, tr("Angemeldet, aber der Router hat keine IP-Adresse vergeben (DHCP). Router pruefen oder neu starten.",
+    finishTest(now, false, tr("Angemeldet, aber der Router hat keine IP-Adresse vergeben (DHCP). Router prüfen oder neu starten.",
                               "Associated, but the router did not hand out an IP address (DHCP). Check or restart the router."));
     return;
   }
@@ -639,6 +652,7 @@ void Net::fillStatus(JsonObject o) {
   o["testDone"] = !_testing && _lastTestSeq != 0;
   o["testOk"] = _lastTestOk;
   o["testSsid"] = _lastTestSsid;
+  o["testText"] = _lastTestText;
   o["phase"] = phaseName();
   o["phaseText"] = phaseText();
   o["reason"] = _failText;

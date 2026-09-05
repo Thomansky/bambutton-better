@@ -8,6 +8,7 @@ struct ApiResult {
   int status = 0;            // HTTP status, or a negative HTTPClient error code
   bool notAwaiting = false;  // clear-plate: Bambuddy said "nothing to clear" (HTTP 400)
   String body;               // response body (truncated)
+  String detail;             // "detail"/"error"/"message" from an error body, else the body excerpt
   String error;              // human readable summary, empty when ok
   uint32_t ms = 0;           // duration, so slow calls are obvious
 };

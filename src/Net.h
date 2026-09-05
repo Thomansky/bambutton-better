@@ -104,7 +104,7 @@ class Net {
 
   CaptiveDns _dns;
   std::vector<ScanEntry> _scan;
-  String _testSsid, _testPass, _failText, _lastTestSsid;
+  String _testSsid, _testPass, _failText, _lastTestSsid, _lastTestText;
   NetPhase _phase = NetPhase::Idle;
 
   bool _apUp = false, _apSecured = false, _staWanted = false, _testing = false, _inProgress = false;

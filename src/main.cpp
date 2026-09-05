@@ -92,7 +92,7 @@ static const char *stationName(int i) { return i == 0 ? "A" : "B"; }
 static void recordClear(int idx, const ApiResult &r) {
   String s = String(tr("Knopf ", "Button ")) + stationName(idx) + ": ";
   if (r.ok) s += "OK, HTTP " + String(r.status) + tr(" nach ", " after ") + String(r.ms) + " ms";
-  else if (r.notAwaiting) s += String(tr("nichts zu raeumen (HTTP 400) nach ", "nothing to clear (HTTP 400) after ")) + String(r.ms) + " ms";
+  else if (r.notAwaiting) s += String(tr("nichts zu räumen (HTTP 400) nach ", "nothing to clear (HTTP 400) after ")) + String(r.ms) + " ms";
   else s += String(tr("FEHLER nach ", "FAILED after ")) + String(r.ms) + " ms: " + r.error;
   lockedCopy(diag.lastClear, sizeof(diag.lastClear), s);
   if (!r.ok && !r.notAwaiting) lockedCopy(diag.lastError, sizeof(diag.lastError), s);
@@ -182,7 +182,7 @@ static void watchdogTask(void *) {
     bool loopStalled = (now - hbLoop) > 120000;
     bool workerStalled = (now - hbWorker) > 240000;
     if (loopStalled || workerStalled) {
-      Serial.printf("WATCHDOG: %s haengt -> Neustart\n",
+      Serial.printf("WATCHDOG: %s hängt -> Neustart\n",
                     loopStalled ? "Hauptschleife" : "Bambuddy-Task");
       Serial.flush();
       delay(200);
@@ -393,7 +393,7 @@ static void handleScan() {
 static bool readWifiBody(String &ssid, String &pass, uint32_t &seq) {
   JsonDocument in;
   if (!bodyJson(in)) {
-    sendError(tr("Ungueltige Anfrage", "Invalid request"));
+    sendError(tr("Ungültige Anfrage", "Invalid request"));
     return false;
   }
   ssid = in["ssid"] | "";
@@ -440,7 +440,7 @@ static void handleWifiConnect() {
   uint32_t seq;
   if (!readWifiBody(ssid, pass, seq)) return;
   if (!net.startTest(ssid, pass, seq)) {
-    sendError(tr("Es laeuft bereits ein Verbindungsversuch — bitte warten",
+    sendError(tr("Es läuft bereits ein Verbindungsversuch — bitte warten",
                  "A connection attempt is already running — please wait"));
     return;
   }
@@ -467,7 +467,7 @@ static void handleWifiSave() {
 
 static void handleWifiFinish() {
   if (net.apActive() && (!net.staConnected() || net.testing())) {
-    sendError(tr("Das Setup-Netz schliesst erst, wenn die WLAN-Verbindung steht",
+    sendError(tr("Das Setup-Netz schließt erst, wenn die WLAN-Verbindung steht",
                  "The setup network only closes once the Wi-Fi connection is up"));
     return;
   }
@@ -523,7 +523,7 @@ static void handlePrinters() {
     return;
   }
   if (h.startsWith("https://")) {
-    sendError(tr("https wird nicht unterstuetzt — bitte die Adresse als IP:Port (http) angeben",
+    sendError(tr("https wird nicht unterstützt — bitte die Adresse als IP:Port (http) angeben",
                  "https is not supported — please enter the address as IP:port (http)"));
     return;
   }
@@ -534,7 +534,7 @@ static void handlePrinters() {
   }
   uint32_t id;
   if (!startJob(JOB_PRINTERS, 0, h, k, id)) {
-    sendError(tr("Bitte warten — eine andere Anfrage laeuft noch", "Please wait — another request is still running"));
+    sendError(tr("Bitte warten — eine andere Anfrage läuft noch", "Please wait — another request is still running"));
     return;
   }
   JsonDocument out;
@@ -589,13 +589,13 @@ static void applyStations() {
 static void handleSave() {
   JsonDocument in;
   if (!bodyJson(in)) {
-    sendError(tr("Ungueltige Anfrage", "Invalid request"));
+    sendError(tr("Ungültige Anfrage", "Invalid request"));
     return;
   }
   String h = in["host"] | "";
   h.trim();
   if (h.startsWith("https://")) {
-    sendError(tr("https wird nicht unterstuetzt — bitte die Adresse als IP:Port (http) angeben",
+    sendError(tr("https wird nicht unterstützt — bitte die Adresse als IP:Port (http) angeben",
                  "https is not supported — please enter the address as IP:port (http)"));
     return;
   }
@@ -608,7 +608,7 @@ static void handleSave() {
   }
   int tx = in["txPower"] | -1;
   if (tx >= 0 && !Settings::validTxPower(tx)) {
-    sendError(tr("Ungueltige Sendeleistung", "Invalid transmit power"));
+    sendError(tr("Ungültige Sendeleistung", "Invalid transmit power"));
     return;
   }
 
@@ -637,7 +637,11 @@ static void handleSave() {
 
   applyStations();
   net.applyTxPower();
-  backoffUntil = 0;
+  // Only settings that change how we talk to Bambuddy lift a 429 back-off;
+  // a language toggle must not.
+  if (!in["host"].isNull() || k.length() || !in["apiEnabled"].isNull() || !in["p0"].isNull() ||
+      !in["p1"].isNull() || !in["pollMs"].isNull())
+    backoffUntil = 0;
   JsonDocument out;
   out["ok"] = true;
   sendJson(out);
@@ -651,7 +655,7 @@ static int argIndex() {
 static void handleIdentify() {
   int i = argIndex();
   if (i < 0) {
-    sendError(tr("Ungueltiger Knopf", "Invalid button"));
+    sendError(tr("Ungültiger Knopf", "Invalid button"));
     return;
   }
   stations[i].identify(4000);
@@ -665,7 +669,7 @@ static void handleIdentify() {
 static void handleTestClear() {
   int i = argIndex();
   if (i < 0) {
-    sendError(tr("Ungueltiger Knopf", "Invalid button"));
+    sendError(tr("Ungültiger Knopf", "Invalid button"));
     return;
   }
   if (!stations[i].active) {
@@ -685,7 +689,7 @@ static void handleTestClear() {
   }
   uint32_t id;
   if (!startJob(JOB_TESTCLEAR, i, "", "", id)) {
-    sendError(tr("Bitte warten — eine andere Anfrage laeuft noch", "Please wait — another request is still running"));
+    sendError(tr("Bitte warten — eine andere Anfrage läuft noch", "Please wait — another request is still running"));
     return;
   }
   JsonDocument out;
@@ -736,13 +740,13 @@ static void handleOtaUpload() {
   } else if (up.status == UPLOAD_FILE_END) {
     if (otaError.length()) return;
     if (up.totalSize < 262144) {
-      otaError = tr("Datei zu klein fuer eine Firmware — bootloader.bin/partitions.bin gehoeren nicht hierher",
+      otaError = tr("Datei zu klein für eine Firmware — bootloader.bin/partitions.bin gehören nicht hierher",
                     "File too small for a firmware — bootloader.bin/partitions.bin do not belong here");
       Update.abort();
       return;
     }
     if (Update.end(true)) Serial.printf("OTA fertig: %u Bytes\n", (unsigned)up.totalSize);
-    else otaError = String(tr("Update unvollstaendig: ", "Update incomplete: ")) + Update.errorString();
+    else otaError = String(tr("Update unvollständig: ", "Update incomplete: ")) + Update.errorString();
   } else if (up.status == UPLOAD_FILE_ABORTED) {
     otaError = tr("Upload abgebrochen", "Upload aborted");
     Update.abort();

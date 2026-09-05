@@ -76,7 +76,7 @@ details>summary::before{content:"▸ "}details[open]>summary::before{content:"�
   <label data-t="lAddr">Adresse (IP:Port)</label>
   <input id="host" data-p="pAddr" placeholder="z. B. 192.168.1.50:8000" inputmode="url">
   <label data-t="lKey">API-Key</label>
-  <input id="key" type="password" placeholder="API-Key">
+  <input id="key" type="password" data-p="pKey" placeholder="API-Key (Rechte: printers:read, printers:clear_plate)">
   <button onclick="loadPrinters()" data-t="bLoad">Verbindung testen &amp; Drucker laden</button>
   <label class="chk"><input type="checkbox" id="apiOn"> <span data-t="chkApi">Bambuddy-Abfrage aktiv</span></label>
   <label data-t="lPoll">Abfrageintervall</label>
@@ -114,7 +114,7 @@ details>summary::before{content:"▸ "}details[open]>summary::before{content:"�
     <select id="txPower"><option value="34" data-t="optTx34">8,5 dBm – empfohlen für ESP32-C3 Super Mini</option><option value="44">11 dBm</option><option value="52">13 dBm</option><option value="60">15 dBm</option><option value="68">17 dBm</option><option value="78" data-t="optTx78">19,5 dBm – Maximum</option><option value="20">5 dBm</option></select>
     <small data-t="hintTx">Die Antenne des Super Mini verträgt keine volle Leistung: mit 19,5 dBm bricht die Verbindung oft ab oder kommt gar nicht zustande. Erst bei sehr großer Entfernung schrittweise erhöhen.</small>
     <label data-t="lApPass">Passwort für das Setup-Netz „Bambutton-Setup“</label>
-    <input id="apPass" type="password" placeholder="">
+    <input id="apPass" type="password" data-p="pApPass" placeholder="leer = offenes Setup-Netz (8–63 Zeichen)">
     <button onclick="saveAll('m5')" data-t="bSaveSettings">Einstellungen speichern</button>
     <button class="sec" onclick="portal()" data-t="bPortal">Setup-Netz für 10 Minuten öffnen</button>
     <div id="m5" class="msg"></div>
@@ -161,7 +161,7 @@ m_clearOk:'Erfolg – HTTP %1 nach %2 ms. Bambuddy hat die Platte freigegeben.',
 m_clearFail:'Fehlgeschlagen: %1',m_reboot:'Neustart …',m_pickFw:'Bitte zuerst eine firmware.bin auswählen.',m_uploading:'Lade %1 kB hoch – nicht trennen …',
 m_otaOk:'Update eingespielt – das Board startet neu.',m_otaFail:'Update fehlgeschlagen.',m_otaLost:'Upload abgebrochen (Verbindung verloren). Das Board läuft mit der alten Firmware weiter.',
 lead_sta:'Im WLAN „%1“ · %2 · http://%3.local',lead_down:'WLAN „%1“: %2',lead_downSince:' – seit %1 ohne Verbindung',lead_setup:'Ersteinrichtung – verbinde das Board mit deinem WLAN.',
-r_conn:'Verbindung',r_connWith:'verbunden mit „%1“',r_noWifi:'kein WLAN eingerichtet',r_ip:'IP-Adresse',r_ch:' · Kanal %1',r_sig:'Empfang',r_name:'Name',r_since:'Verbunden seit',r_reconn:' · %1× neu verbunden',
+r_conn:'Verbindung',r_connWith:'verbunden mit „%1“',r_down:'„%1“ – %2',r_noWifi:'kein WLAN eingerichtet',r_ip:'IP-Adresse',r_ch:' · Kanal %1',r_sig:'Empfang',r_name:'Name',r_since:'Verbunden seit',r_reconn:' · %1× neu verbunden',
 r_ap:'Setup-Netz',r_apOpen:'„%1“ offen (%2 %3, %4)',dev1:'Gerät',devN:'Geräte',noPw:'ohne Passwort',r_apClosed:'geschlossen',
 w_last:'Letzter Verbindungsversuch: %1',w_retry:'Das Board versucht weiter, „%1“ zu erreichen (bisher %2 Versuche). Solange keine Verbindung steht, bleibt das Setup-Netz offen; sobald sie steht, schließt es sich von selbst.',w_lastErr:' Letzter Fehler: %1',
 st_printer:'Drucker %1',st_noLink:'keine Verbindung',st_online:'online',st_offline:'Drucker offline',st_await:'Platte räumen',st_ready:'bereit',st_light:'Licht %1',on:'an',off:'aus',st_none:'kein Drucker zugeordnet',r_btn:'Knopf %1',
@@ -201,18 +201,20 @@ m_clearOk:'Success – HTTP %1 after %2 ms. Bambuddy has cleared the plate.',m_c
 m_clearFail:'Failed: %1',m_reboot:'Restarting …',m_pickFw:'Please choose a firmware.bin first.',m_uploading:'Uploading %1 kB – do not disconnect …',
 m_otaOk:'Update installed – the board is restarting.',m_otaFail:'Update failed.',m_otaLost:'Upload aborted (connection lost). The board keeps running the old firmware.',
 lead_sta:'On Wi-Fi “%1” · %2 · http://%3.local',lead_down:'Wi-Fi “%1”: %2',lead_downSince:' – no connection for %1',lead_setup:'First setup – connect the board to your Wi-Fi.',
-r_conn:'Connection',r_connWith:'connected to “%1”',r_noWifi:'no Wi-Fi configured',r_ip:'IP address',r_ch:' · channel %1',r_sig:'Signal',r_name:'Name',r_since:'Connected for',r_reconn:' · reconnected %1×',
+r_conn:'Connection',r_connWith:'connected to “%1”',r_down:'“%1” – %2',r_noWifi:'no Wi-Fi configured',r_ip:'IP address',r_ch:' · channel %1',r_sig:'Signal',r_name:'Name',r_since:'Connected for',r_reconn:' · reconnected %1×',
 r_ap:'Setup network',r_apOpen:'“%1” open (%2 %3, %4)',dev1:'device',devN:'devices',noPw:'no password',r_apClosed:'closed',
 w_last:'Last connection attempt: %1',w_retry:'The board keeps trying to reach “%1” (%2 attempts so far). The setup network stays open while there is no connection and closes by itself once there is.',w_lastErr:' Last error: %1',
 st_printer:'Printer %1',st_noLink:'no link',st_online:'online',st_offline:'printer offline',st_await:'clear plate',st_ready:'ready',st_light:'light %1',on:'on',off:'off',st_none:'no printer assigned',r_btn:'Button %1',
 bb_off:'switched off',bb_unconf:'not configured',bb_none:'no answer yet',bb_ok:'reachable',bb_last:'last answer %1 ago',r_polls:'Polls',r_pollsV:'%1 (%2 errors)',
 r_lastErr:'Last error',r_lastClear:'Last clear-plate',r_board:'Board',r_boardV:'up for %1 · %2 kB free'
 }};
-var L='de';try{L=localStorage.getItem('lang')||'de'}catch(e){}
+var L='de';try{L=localStorage.getItem('lang')||'de'}catch(e){}if(!I[L])L='de';
 function T(k){var a=arguments,s=I[L][k]!==undefined?I[L][k]:(I.de[k]||k);return s.replace(/%(\d)/g,function(m,n){return a[+n]!==undefined?a[+n]:m})}
 function applyLang(l){L=l;try{localStorage.setItem('lang',l)}catch(e){}document.documentElement.lang=l;$('langBtn').textContent=l==='de'?'EN':'DE';
   var q=document.querySelectorAll('[data-t]');for(var i=0;i<q.length;i++){var k=q[i].getAttribute('data-t');if(I[l][k]!==undefined)q[i].textContent=I[l][k]}
   q=document.querySelectorAll('[data-p]');for(i=0;i<q.length;i++){k=q[i].getAttribute('data-p');if(I[l][k]!==undefined)q[i].placeholder=I[l][k]}
+  $('wifiSum').textContent=T(S&&S.net.hasWifi?'wifiChange':'wifiSetup');
+  if(lastScan)fillScan(lastScan);
   if(S)render(S)}
 var langPending=false;
 function toggleLang(){var l=L==='de'?'en':'de';applyLang(l);langPending=true;P('/api/save',{lang:l==='en'?1:0}).then(function(){langPending=false;refresh()}).catch(function(){langPending=false})}
@@ -225,7 +227,7 @@ function row(k,v){return '<tr><td>'+k+'</td><td>'+v+'</td></tr>'}
 function fmtS(s){s=Math.round(s);if(s<90)return s+' s';var m=Math.round(s/60);if(m<90)return m+' min';var h=Math.floor(m/60);return h+' h '+(m-h*60)+' min'}
 function q(r){return r>=-55?(L==='de'?'sehr gut':'excellent'):r>=-67?(L==='de'?'gut':'good'):r>=-75?(L==='de'?'mittel':'fair'):r>=-85?(L==='de'?'schwach':'weak'):(L==='de'?'sehr schwach':'very weak')}
 function prog(t){var p=$('prog');p.textContent=t;p.className='prog'+(t?' on':'')}
-var dirty={},S=null,init=false,fails=0,armed={},doneShown=0;
+var dirty={},S=null,init=false,fails=0,armed={},doneShown=0,lastScan=null;
 ['host','key','apiOn','p0','p1','pollMs','idleLed','txPower','apPass','hostname','ssid','ssidm','pw'].forEach(function(i){
   ['input','change'].forEach(function(ev){$(i).addEventListener(ev,function(){dirty[i]=1})})});
 function setIf(id,v){if(dirty[id]||document.activeElement===$(id))return;var e=$(id);if(e.type==='checkbox')e.checked=!!v;else e.value=v}
@@ -246,35 +248,39 @@ function scan(fresh){
   }).catch(function(){msg('m1','err',T('m_noBoard'))});
 }
 function fillScan(list){
+  lastScan=list;
   var s=$('ssid'),cur=ssidVal()||(S&&S.net.ssid)||'';
-  s.innerHTML='<option value="">'+esc(T('optChoose'))+'</option>';
+  s.innerHTML='<option value="" data-t="optChoose">'+esc(T('optChoose'))+'</option>';
   list.forEach(function(n){var o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid+'  ('+q(n.rssi)+(n.secure?'':(L==='de'?', offen':', open'))+')';s.appendChild(o)});
-  var m=document.createElement('option');m.value='__m';m.textContent=T('optManual');s.appendChild(m);
+  var m=document.createElement('option');m.value='__m';m.setAttribute('data-t','optManual');m.textContent=T('optManual');s.appendChild(m);
   if(cur){var f=false;for(var i=0;i<s.options.length;i++)if(s.options[i].value===cur)f=true;
     if(f)s.value=cur;else{s.value='__m';$('ssidm').value=cur;$('ssidm').classList.remove('hide')}}
 }
-var tf=0,mySeq=0;
+var tf=0,mySeq=0,chainId=0;
 function connectWifi(){
   var ssid=ssidVal();if(!ssid){msg('m1','err',T('m_pickSsid'));return}
   $('done').classList.add('hide');msg('m1','','');
   mySeq=Date.now()%2000000000;
+  var chain=++chainId;  // a second click starts a new chain; the old one goes quiet
   prog(T('m_connecting',ssid));
   P('/api/wifi/connect',{ssid:ssid,pass:$('pw').value,hostname:$('hostname').value.trim(),seq:mySeq})
-   .then(function(d){if(!d.ok){prog('');msg('m1','err',d.error||'?');return}tf=0;setTimeout(pollTest,1500)})
-   .catch(function(){tf=0;setTimeout(pollTest,2000)});
+   .then(function(d){if(chain!==chainId)return;if(!d.ok){prog('');msg('m1','err',d.error||'?');return}tf=0;setTimeout(function(){pollTest(chain)},1500)})
+   .catch(function(){if(chain!==chainId)return;tf=0;setTimeout(function(){pollTest(chain)},2000)});
 }
-function pollTest(){
+function pollTest(chain){
   J('/api/wifi/state').then(function(d){
+    if(chain!==chainId)return;
     tf=0;
-    if(d.testing&&d.testSeq===mySeq){prog(d.phaseText+' …');setTimeout(pollTest,1500);return}
-    if(d.testing){setTimeout(pollTest,1500);return}
+    if(d.testing&&d.testSeq===mySeq){prog(d.phaseText+' …');setTimeout(function(){pollTest(chain)},1500);return}
+    if(d.testing){setTimeout(function(){pollTest(chain)},1500);return}
     prog('');
     if(d.testSeq!==mySeq){msg('m1','err',T('m_notArrived'));return}
     if(d.testDone&&d.testOk&&d.sta)showDone(d);
-    else msg('m1','err',T('m_fail',d.reason||d.phaseText));
+    else msg('m1','err',T('m_fail',d.testText||d.reason||d.phaseText));
   }).catch(function(){
+    if(chain!==chainId)return;
     tf++;
-    if(tf<=20){prog(T('m_wait'));setTimeout(pollTest,2500)}
+    if(tf<=20){prog(T('m_wait'));setTimeout(function(){pollTest(chain)},2500)}
     else{prog('');msg('m1','err',T('m_lost',$('hostname').value.trim()||'bambutton'))}
   });
 }
@@ -316,7 +322,7 @@ function loadPrinters(){
       if(!r.ok){msg('m2','err',(r.error||'?')+(r.status>0?' (HTTP '+r.status+', '+r.ms+' ms)':''));return}
       var list=r.printers||[];
       [0,1].forEach(function(i){var s=$('p'+i),cur=s.value||s.getAttribute('data-cur')||'0';
-        s.innerHTML='<option value="0">'+esc(T('optNoPrinter'))+'</option>';
+        s.innerHTML='<option value="0" data-t="optNoPrinter">'+esc(T('optNoPrinter'))+'</option>';
         list.forEach(function(p){var o=document.createElement('option');o.value=p.id;o.textContent=p.name+' (ID '+p.id+')';s.appendChild(o)});
         s.value=cur;if(s.value!==cur)s.value='0'});
       msg('m2','ok',T('m_printers',list.length,r.ms));
@@ -339,7 +345,7 @@ function testClear(i){
   P('/api/testclear?i='+i).then(function(d){
     if(!d.ok){msg('m4','err',d.error||'?');return}
     jobPoll(d.job,function(r){
-      if(r.ok)msg('m4','ok',T('m_clearOk',r.status,r.ms));
+      if(r.ok)msg('m4','ok',T('m_clearOk',r.status,r.ms)+(r.body?'\n'+r.body:''));
       else if(r.notAwaiting)msg('m4','ok',T('m_clearNa',r.error));
       else msg('m4','err',T('m_clearFail',(r.error||'?')+(r.status>0?' (HTTP '+r.status+', '+r.ms+' ms)':'')));
       refresh();
@@ -363,7 +369,7 @@ function render(d){
   if(n.sta)$('lead').textContent=T('lead_sta',n.ssid,n.ip,n.hostname);
   else if(n.hasWifi)$('lead').textContent=T('lead_down',n.ssid,n.phaseText)+(n.downSec?T('lead_downSince',fmtS(n.downSec)):'');
   else $('lead').textContent=T('lead_setup');
-  h+=row(T('r_conn'),n.sta?dot('g')+T('r_connWith',esc(n.ssid)):(n.testing?dot('y')+esc(n.phaseText)+' …':dot('r')+(n.hasWifi?'„'+esc(n.ssid)+'“ – '+esc(n.phaseText):T('r_noWifi'))));
+  h+=row(T('r_conn'),n.sta?dot('g')+T('r_connWith',esc(n.ssid)):(n.testing?dot('y')+esc(n.phaseText)+' …':dot('r')+(n.hasWifi?T('r_down',esc(n.ssid),esc(n.phaseText)):T('r_noWifi'))));
   if(n.sta){h+=row(T('r_ip'),esc(n.ip)+T('r_ch',n.channel));h+=row(T('r_sig'),esc(n.rssiText)+' ('+n.rssi+' dBm)');h+=row(T('r_name'),'http://'+esc(n.hostname)+'.local');h+=row(T('r_since'),fmtS(n.upSec)+(n.reconnects?T('r_reconn',n.reconnects):''))}
   h+=row(T('r_ap'),n.ap?dot('y')+T('r_apOpen',esc(n.apSsid),n.apClients,T(n.apClients==1?'dev1':'devN'),n.apOpen?T('noPw'):'WPA2'):T('r_apClosed'));
   $('wifiTab').innerHTML=h;
