@@ -1,7 +1,8 @@
 {
   "name": "Bambutton",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "new_install_prompt_erase": true,
+  "new_install_improv_wait_time": 0,
   "builds": [
     {
       "chipFamily": "ESP32-C3",

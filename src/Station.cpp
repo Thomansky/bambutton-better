@@ -1,4 +1,5 @@
 #include "Station.h"
+#include "Settings.h"
 
 void Station::begin(int idx, int ledPin, int buttonPin, int printerId_) {
   index = idx;
@@ -18,7 +19,7 @@ void Station::pollButton() {
   uint32_t now = millis();
   if (raw != _stable) {
     if (_changeStart == 0) {
-      _changeStart = now;
+      _changeStart = now ? now : 1;
     } else if (now - _changeStart >= 40) {  // 40 ms debounce
       _stable = raw;
       _changeStart = 0;
@@ -40,19 +41,34 @@ void Station::identify(uint32_t durationMs) {
   if (_identifyUntil == 0) _identifyUntil = 1;
 }
 
+void Station::feedback(bool ok) {
+  _fbOk = ok;
+  _fbUntil = millis() + (ok ? 900 : 1500);
+  if (_fbUntil == 0) _fbUntil = 1;
+}
+
 void Station::updateLed(uint32_t now) {
   if (_led < 0) return;
   bool on;
   if (_identifyUntil != 0 && (int32_t)(_identifyUntil - now) > 0) {
-    on = ((now / 150) % 2) == 0;  // fast blink: "this is the one"
+    on = ((now / 150) % 2) == 0;          // fast blink: "this is the one"
+  } else if (_fbUntil != 0 && (int32_t)(_fbUntil - now) > 0) {
+    on = _fbOk ? ((now / 220) % 2) == 0   // two calm blinks: accepted
+               : ((now / 45) % 2) == 0;   // flicker: rejected / failed
   } else if (!active) {
-    on = false;                   // no printer assigned -> dark
+    on = false;                           // no printer assigned -> dark
   } else if (busy) {
-    on = ((now / 80) % 2) == 0;   // very fast: request in flight
+    on = ((now / 80) % 2) == 0;           // very fast: request in flight
+  } else if (noLink) {
+    on = (now % 2000) < 70;               // heartbeat blip: no connection
   } else if (awaiting) {
-    on = ((now / 400) % 2) == 0;  // slow blink: plate needs clearing
+    on = ((now / 400) % 2) == 0;          // slow blink: plate needs clearing
+  } else if (idleMode == IDLE_ON) {
+    on = true;
+  } else if (idleMode == IDLE_OFF) {
+    on = false;
   } else {
-    on = chamberLight;            // otherwise follow the chamber light
+    on = chamberLight;                    // follow the chamber light
   }
   if (on != _ledOn) {
     _ledOn = on;

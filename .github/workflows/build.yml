@@ -31,7 +31,7 @@ jobs:
           key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
 
       - name: Install PlatformIO
-        run: pip install --upgrade platformio
+        run: pip install platformio==6.1.19
 
       - name: Build
         run: pio run -e esp32-c3-super-mini

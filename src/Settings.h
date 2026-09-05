@@ -9,26 +9,48 @@ struct StationCfg {
   int buttonPin = 4;
 };
 
+// What the LED shows while nothing special is going on.
+enum IdleLed : uint8_t { IDLE_FOLLOW_LIGHT = 0, IDLE_ON = 1, IDLE_OFF = 2 };
+
 class Settings {
  public:
   String wifiSsid;
   String wifiPass;
   String hostname = "bambutton";
-  String host;    // "192.168.1.50:8000" — no scheme, no /api/v1
+  String apPass;             // empty = open setup network, else WPA2 (8..63 chars)
+  String host;               // "192.168.1.50:8000" — no scheme, no /api/v1
   String apiKey;
-  bool apiEnabled = true;  // polling can be switched off without losing the config
+  bool apiEnabled = true;    // polling can be switched off without losing the config
   StationCfg stations[STATION_COUNT];
   uint32_t pollIntervalMs = 3000;
   // Clearing a plate makes Bambuddy talk to the printer, which can take
   // several seconds. A short timeout is the classic cause of "the button
   // stops blinking but nothing happens".
   uint32_t httpTimeoutMs = 20000;
+  // Wi-Fi transmit power in wifi_power_t units (quarter dBm). The ESP32-C3
+  // Super Mini's antenna is badly matched; at full power (78 = 19.5 dBm) many
+  // boards cannot connect at all. 34 = 8.5 dBm is the widely used fix.
+  int8_t txPower = 34;
+  uint8_t idleLed = IDLE_FOLLOW_LIGHT;
 
   void load();
   void save();
   bool hasWifi() const { return wifiSsid.length() > 0; }
   bool hasApi() const { return host.length() > 0 && apiKey.length() > 0; }
-  String baseUrl() const;
+  String baseUrl() const { return baseUrlFor(host); }
+
+  // Accepts "1.2.3.4:8000", "http://1.2.3.4:8000/" or a full ".../api/v1"
+  // URL and returns a clean "http://host[:port]/api/v1".
+  static String baseUrlFor(const String &host);
+  // "Mein Knopf!" -> "mein-knopf"; empty -> "bambutton". RFC 1123 labels only.
+  static String cleanHostname(const String &raw);
+  static bool validTxPower(int v);
+
+  // The web handlers (loop task) and the Bambuddy worker task both use the
+  // String members. Copy what you need under the lock; never hold it across
+  // a network call.
+  void lock();
+  void unlock();
 };
 
 extern Settings settings;
